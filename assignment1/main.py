@@ -165,12 +165,16 @@ print("Completed 5.1")
 duration = 1000 // 15
 images_1 = render_torus.render_torus(image_size=args.image_size)
 imageio.mimsave("submission/torus_360.gif", images_1, duration=duration, loop=0)
+images_1c = render_torus.render_cone(image_size=args.image_size)
+imageio.mimsave("submission/cone_360.gif", images_1c, duration=duration, loop=0)
 print("Completed 5.2")
 
 # 5.3 Implicit Surfaces (15 points)
 duration = 1000 // 15
 images_2 = render_torus.render_torus_mesh(image_size=args.image_size)
 imageio.mimsave("submission/torus_mesh.gif", images_2, duration=duration, loop=0)
+images_2c = render_torus.render_cone_mesh(image_size=args.image_size)
+imageio.mimsave("submission/cone_mesh.gif", images_2c, duration=duration, loop=0)
 print("Completed 5.3")
 
 ############### 6. Do Something Fun ###############
