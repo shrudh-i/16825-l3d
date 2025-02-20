@@ -88,9 +88,14 @@ def compute_sampling_metrics(pred_points, gt_points, thresholds, eps=1e-8):
 def evaluate(predictions, mesh_gt, thresholds, args):
     if args.type == "vox":
         voxels_src = predictions
+        voxels_src = torch.nn.functional.sigmoid(voxels_src)
         H,W,D = voxels_src.shape[2:]
         vertices_src, faces_src = mcubes.marching_cubes(voxels_src.detach().cpu().squeeze().numpy(), isovalue=0.5)
         vertices_src = torch.tensor(vertices_src).float()
+        # ValueError! Meshes are empty
+        if vertices_src.shape == torch.Size([0, 3]):
+            print("Meshes are empty")
+            return False
         faces_src = torch.tensor(faces_src.astype(int))
         mesh_src = pytorch3d.structures.Meshes([vertices_src], [faces_src])
         pred_points = sample_points_from_meshes(mesh_src, args.n_points)
@@ -164,6 +169,9 @@ def evaluate_model(args):
 
         metrics = evaluate(predictions, mesh_gt, thresholds, args)
 
+        if metrics is False:
+            continue
+
         # TODO:
         # if (step % args.vis_freq) == 0:
         #     # visualization block
@@ -179,7 +187,7 @@ def evaluate_model(args):
         avg_p_score.append(torch.tensor([metrics["Precision@%f" % t] for t in thresholds]))
         avg_r_score.append(torch.tensor([metrics["Recall@%f" % t] for t in thresholds]))
         avg_f1_score.append(torch.tensor([metrics["F1@%f" % t] for t in thresholds]))
-
+        
         print("[%4d/%4d]; ttime: %.0f (%.2f, %.2f); F1@0.05: %.3f; Avg F1@0.05: %.3f" % (step, max_iter, total_time, read_time, iter_time, f1_05, torch.tensor(avg_f1_score_05).mean()))
     
 

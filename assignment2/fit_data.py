@@ -2,6 +2,8 @@ import argparse
 import os
 import time
 
+import pytorch3d.ops
+
 import losses
 from pytorch3d.utils import ico_sphere
 from r2n2_custom import R2N2
@@ -10,9 +12,7 @@ from pytorch3d.structures import Meshes
 import dataset_location
 import torch
 
-
-
-
+from utils import *
 
 
 def get_args_parser():
@@ -129,6 +129,8 @@ def train_model(args):
 
         # fitting
         fit_voxel(voxels_src, voxels_tgt, args)
+        render_vox(voxels_src)
+        render_vox(voxels_tgt, "submission/target_vox.gif")
 
 
     elif args.type == "point":
@@ -138,7 +140,9 @@ def train_model(args):
         pointclouds_tgt = sample_points_from_meshes(mesh_tgt, args.n_points)
 
         # fitting
-        fit_pointcloud(pointclouds_src, pointclouds_tgt, args)        
+        fit_pointcloud(pointclouds_src, pointclouds_tgt, args)
+        render_pointcloud(pointclouds_src)
+        render_pointcloud(pointclouds_tgt, "submission/target_point.gif")
     
     elif args.type == "mesh":
         # initialization
@@ -147,11 +151,9 @@ def train_model(args):
         mesh_tgt = Meshes(verts=[feed_cuda['verts']], faces=[feed_cuda['faces']])
 
         # fitting
-        fit_mesh(mesh_src, mesh_tgt, args)        
-
-
-    
-    
+        fit_mesh(mesh_src, mesh_tgt, args)
+        render_mesh(mesh_src)
+        render_mesh(mesh_tgt, "submission/target_mesh.gif")
 
 
 if __name__ == '__main__':
