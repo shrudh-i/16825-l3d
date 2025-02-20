@@ -22,15 +22,15 @@ class SingleViewto3D(nn.Module):
             # Output: b x 32 x 32 x 32
             # pass
             # TODO:
-            # self.layer0 = torch.nn.Sequential(
-            #     torch.nn.Linear(512, 1024)
-            # )
             self.layer0 = torch.nn.Sequential(
-                torch.nn.Linear(512, 1024),
-                torch.nn.ReLU(),
-                torch.nn.Linear(1024, 2048),
-                torch.nn.ReLU()
+                torch.nn.Linear(512, 1024)
             )
+            # self.layer0 = torch.nn.Sequential(
+            #     torch.nn.Linear(512, 1024),
+            #     # torch.nn.ReLU(),
+            #     torch.nn.Linear(1024, 2048),
+            #     # torch.nn.ReLU()
+            # )
             self.layer1 = torch.nn.Sequential(
                 torch.nn.ConvTranspose3d(256, 128, kernel_size=4, stride=2, bias=False, padding=1),
                 torch.nn.BatchNorm3d(128),
@@ -107,8 +107,7 @@ class SingleViewto3D(nn.Module):
             gen_volume = self.layer2(gen_volume)
             gen_volume = self.layer3(gen_volume)
             gen_volume = self.layer4(gen_volume)
-            voxels_pred = self.layer5(gen_volume)
-            # voxels_pred =             
+            voxels_pred = self.layer5(gen_volume)      
             return voxels_pred
 
         elif args.type == "point":
