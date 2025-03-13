@@ -325,7 +325,7 @@ class NeuralRadianceField(torch.nn.Module):
                 torch.nn.ReLU()
             )
         
-        # MLP for Color Prediction
+        # MLP for Directional Coordinates (view dependence)
             # Combines the direction embedding w/ spatial features -> predict RGB colors
         self.layers_dir = torch.nn.Sequential(
                 torch.nn.Linear(embedding_dim_dir+hidden_dims[0], hidden_dims[1]),
