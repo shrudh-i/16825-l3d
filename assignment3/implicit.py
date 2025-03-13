@@ -383,6 +383,42 @@ class NeuralSurface(torch.nn.Module):
         # TODO (Q6): Implement Neural Surface MLP to output per-point SDF
         # TODO (Q7): Implement Neural Surface MLP to output per-point color
 
+        # embedding layer using harmonic functions to transform the 3D coords
+        self.harmonic_embedding_xyz = HarmonicEmbedding(3, cfg.n_harmonic_functions_xyz)
+        # output dim of harmonic embedding
+        self.embedding_dim_xyz = self.harmonic_embedding_xyz.output_dim
+
+        # number of layers in the MLP
+        self.n_layers_dist = cfg.n_layers_distance
+        self.n_layers_color = cfg.n_layers_color
+
+        hidden_dims = [cfg.n_hidden_neurons_distance, cfg.n_hidden_neurons_color]
+        self.skip_ind = self.n_layers_distance//2
+        self.layers_dist = torch.nn.ModuleList()
+
+
+        for layeri in range(self.n_layers_distance):
+            if layeri == 0:
+                self.layers_dist.append(torch.nn.Linear(self.embedding_dim_xyz, hidden_dims[0]))
+            elif layeri == self.skip_ind:
+                self.layers_dist.append(torch.nn.Linear(self.embedding_dim_xyz+hidden_dims[0], hidden_dims[0]))
+            else:
+                self.layers_dist.append(torch.nn.Linear(hidden_dims[0], hidden_dims[0]))
+        
+        self.relu = torch.nn.ReLU()
+        self.layer_sigma = torch.nn.Linear(hidden_dims[0], 1)
+        
+        self.rgb = torch.nn.ModuleList()
+        for layeri in range(self.n_layers_color):
+            if layeri == 0: 
+                self.rgb.append(torch.nn.Linear(3+hidden_dims[0], hidden_dims[1]))
+            else: 
+                self.rgb.append(torch.nn.Linear(hidden_dims[1], hidden_dims[1]))
+            self.rgb.append(torch.nn.ReLU())
+        
+        self.rgb.append(torch.nn.Linear(hidden_dims[1], 3))
+        self.rgb.append(torch.nn.Sigmoid())
+
     def get_distance(
         self,
         points
@@ -393,7 +429,18 @@ class NeuralSurface(torch.nn.Module):
             distance: N X 1 Tensor, where N is number of input points
         '''
         points = points.view(-1, 3)
-        pass
+        harmonic_embedding = self.harmonic_embedding_xyz(points)
+
+        for i, layer in enumerate(self.layers_dist):
+            if i == 0:
+                # x = layer(harmonic_embedding)
+                x = harmonic_embedding
+            else:
+                if i == self.skip_ind:
+                    x = torch.cat((x, harmonic_embedding), dim=-1)
+
+            x = self.relu(layer(x))
+        return self.layer_sigma(x)
     
     def get_color(
         self,

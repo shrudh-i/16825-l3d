@@ -24,7 +24,7 @@ def main():
     '''
     5. Sphere Tracing
     '''
-    subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "torus_surface"])
+    # subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "torus_surface"])
 
 
 if __name__ == "__main__":
