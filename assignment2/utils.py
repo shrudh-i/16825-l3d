@@ -48,16 +48,16 @@ def render_vox(voxels_src, src_path = "submission/source_vox.gif"):
         textures = textures
     ).to(device)
     
-    lights = pytorch3d.renderer.PointLights(device=device, location=[[2.0, 2.0, -2.0]])
+    # lights = pytorch3d.renderer.PointLights(device=device, location=[[2.0, 2.0, -2.0]])
+    lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
     
     renderer = get_mesh_renderer(image_size=256, device=device)
 
     my_images = []
     
     for i in range (0,360,10):
-        R, T = pytorch3d.renderer.look_at_view_transform(dist=3, elev=0, azim=i)
+        R, T = pytorch3d.renderer.look_at_view_transform(dist=2, elev=0, azim=i)
         cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device)
-        lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
         rend = renderer(src_mesh, cameras=cameras, lights=lights)
         rend = rend.cpu().numpy()[0, ..., :3].clip(0,1)
         rend = (rend * 255).astype(np.uint8)
@@ -75,12 +75,13 @@ def render_pointcloud(pointclouds_src, src_path = "submission/source_point.gif")
         device = torch.device("cpu")
 
     pointclouds_src = pointclouds_src.detach()[0]
+    
     color = (pointclouds_src - pointclouds_src.min()) / (pointclouds_src.max() - pointclouds_src.min())
 
     pcd = pytorch3d.structures.Pointclouds(
         points=[pointclouds_src], features=[color],
     ).to(device)
-
+        
     # initialize the renderer
     raster_settings = PointsRasterizationSettings(image_size=256, radius=0.01)
     renderer = PointsRenderer(
@@ -93,10 +94,12 @@ def render_pointcloud(pointclouds_src, src_path = "submission/source_point.gif")
     my_images = []
 
     for i in range (0,360,10):
-        R, T = pytorch3d.renderer.look_at_view_transform(dist=3, elev=0, azim=i)
+        R, T = pytorch3d.renderer.look_at_view_transform(dist=1.8, elev=15, azim=i)
+        # R, T = pytorch3d.renderer.look_at_view_transform(dist=2, elev=30, azim=i)
         cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R @ r, T=T, device=device)
 
-        lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
+        # lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
+        lights = pytorch3d.renderer.PointLights(location=[[0, 0, -4]], device=device)
 
         rend = renderer(pcd, cameras=cameras, lights=lights)
         rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
@@ -127,16 +130,18 @@ def render_mesh(mesh_src, src_path = "submission/source_mesh.gif"):
         textures = textures
     ).to(device)
     
-    lights = pytorch3d.renderer.PointLights(device=device, location=[[2.0, 2.0, -2.0]])
+    # lights = pytorch3d.renderer.PointLights(device=device, location=[[2.0, 2.0, -2.0]])
+    lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
     
     renderer = get_mesh_renderer(image_size=256, device=device)
 
     my_images = []
     
     for i in range (0,360,10):
-        R, T = pytorch3d.renderer.look_at_view_transform(dist=3, elev=0, azim=i)
+        R, T = pytorch3d.renderer.look_at_view_transform(dist=1, elev=30, azim=i)
+        # R, T = pytorch3d.renderer.look_at_view_transform(dist=2, elev=0, azim=i)
         cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device)
-        lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
+        # lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
         rend = renderer(src_mesh, cameras=cameras, lights=lights)
         rend = rend.cpu().detach().numpy()[0, ..., :3].clip(0,1)
         rend = (rend * 255).astype(np.uint8)
@@ -144,4 +149,42 @@ def render_mesh(mesh_src, src_path = "submission/source_mesh.gif"):
 
     imageio.mimsave(src_path, my_images, loop=0, fps=12)
     
+    return
+
+def render_pointcloud_2_6(pointclouds_src, src_path = "submission/source_point.gif"):
+    # set the device
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    else:
+        device = torch.device("cpu")
+
+    # pointclouds_src = pointclouds_src.detach()[0]
+        
+    # initialize the renderer
+    raster_settings = PointsRasterizationSettings(image_size=256, radius=0.01)
+    renderer = PointsRenderer(
+        rasterizer=PointsRasterizer(raster_settings=raster_settings),
+        compositor=AlphaCompositor(background_color=(1,1,1)),
+    )
+
+    angle = torch.Tensor([0, 0, 0])
+    r = pytorch3d.transforms.euler_angles_to_matrix(angle, "XYZ")
+    my_images = []
+
+    for i in range (0,360,10):
+        R, T = pytorch3d.renderer.look_at_view_transform(dist=1.8, elev=15, azim=i)
+        # R, T = pytorch3d.renderer.look_at_view_transform(dist=2, elev=30, azim=i)
+        cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R @ r, T=T, device=device)
+
+        # lights = pytorch3d.renderer.PointLights(location=[[0, 0, -3]], device=device)
+        lights = pytorch3d.renderer.PointLights(location=[[0, 0, -4]], device=device)
+
+        rend = renderer(pointclouds_src, cameras=cameras, lights=lights)
+        rend = rend.cpu().detach().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
+
+        rend = (rend*255).astype(np.uint8)
+        my_images.append(rend)
+    
+    imageio.mimsave(src_path, my_images, fps=12, loop=0)
+
     return

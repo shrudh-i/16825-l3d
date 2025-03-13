@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from pytorch3d.transforms import Rotate, axis_angle_to_matrix
 import math
 import numpy as np
+from utils import *
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Singleto3D', add_help=False)
@@ -28,6 +29,8 @@ def get_args_parser():
     parser.add_argument('--load_checkpoint', action='store_true')  
     parser.add_argument('--device', default='cuda', type=str) 
     parser.add_argument('--load_feat', action='store_true') 
+    ## To visualize for Section 2.6
+    parser.add_argument('--vis_2_6', default=False, type=bool)
     return parser
 
 def preprocess(feed_dict, args):
@@ -173,11 +176,70 @@ def evaluate_model(args):
             continue
 
         # TODO:
-        # if (step % args.vis_freq) == 0:
+        if (step % args.vis_freq) == 0:
         #     # visualization block
         #     #  rend = 
         #     plt.imsave(f'vis/{step}_{args.type}.png', rend)
-      
+            if args.type == "vox":
+                f1_05 = metrics['F1@0.050000'].float()
+                print("f1_05", type(f1_05), f1_05)
+                rend = images_gt[0, ..., :3].detach().cpu().numpy().clip(0, 1)
+                
+                plt.imsave(f'submission/vox_eval/{step}{args.type}.png', rend)
+                render_vox(feed_dict['voxels'].to(args.device)[0], src_path = f'submission/vox_eval/{step}_{args.type}_truth_vox.gif')
+                render_vox(predictions[0], src_path = f'submission/vox_eval/{step}_{args.type}.gif')
+                render_mesh(mesh_gt, src_path=f'submission/vox_eval/{step}_{args.type}_truth.gif')
+
+            elif args.type == "point":
+                f1_05 = metrics['F1@0.050000'].float()
+                print("f1_05", type(f1_05), f1_05)
+                rend = images_gt[0, ..., :3].detach().cpu().numpy().clip(0, 1)
+                if args.vis_2_6 == True:
+                    save_path = "submission/point_eval/Section_2_6/"
+                    # Compute nearest neighbor distances
+                    points_gt = sample_points_from_meshes(mesh_gt, args.n_points)
+                    p1_dists, _, _ = knn_points(predictions, points_gt.to(args.device))
+
+                    # Compute mean distance
+                    p1_mean = torch.mean(p1_dists)
+                    
+                    # Assign colors based on distance threshold
+                    colors = torch.zeros((args.n_points, 3), device=args.device, dtype=torch.float)  # Ensure colors is float
+                    colors[p1_dists.squeeze() < p1_mean] = torch.tensor([0.0, 0.0, 1.0], device=args.device, dtype=torch.float)  # Blue for closer points
+                    colors[p1_dists.squeeze() >= p1_mean] = torch.tensor([5.0, 1.0, 1.0], device=args.device, dtype=torch.float)  # Purple for farther points
+
+                    # Visualize the colored point cloud
+                    point_cloud = pytorch3d.structures.Pointclouds(
+                        points=[predictions.squeeze(0)],  # Remove batch dimension
+                        features=[colors.squeeze(0)]          # Ensure colors match the points' shape
+                    ).to(args.device)
+
+                    plt.imsave(f'{save_path}{step}_{args.type}.png', rend)
+                    render_pointcloud(points_gt, src_path= f'{save_path}{step}_{args.type}_groundtruth_pcd.gif')
+                    render_pointcloud_2_6(point_cloud, src_path= f'{save_path}{step}_{args.type}.gif')
+                    render_mesh(mesh_gt, src_path=f'{save_path}{step}_{args.type}_groundtruth.gif')
+
+                else:
+                    save_path = "submission/point_eval/"
+                    
+                    plt.imsave(f'{save_path}{step}_{args.type}.png', rend)
+                    points_gt = sample_points_from_meshes(mesh_gt, args.n_points)
+                    render_pointcloud(points_gt, src_path= f'{save_path}{step}_{args.type}_groundtruth_pcd.gif')
+                    render_pointcloud(predictions, src_path= f'{save_path}{step}_{args.type}.gif')
+                    render_mesh(mesh_gt, src_path=f'{save_path}{step}_{args.type}_groundtruth.gif')
+            
+            elif args.type == "mesh":
+                f1_05 = metrics['F1@0.050000'].float()
+                print("f1_05", type(f1_05), f1_05)
+                rend = images_gt[0, ..., :3].detach().cpu().numpy().clip(0, 1)
+                if args.w_smooth != 0.1:
+                    save_path = "submission/mesh_eval_" + str(args.w_smooth) + "/"
+                else:
+                    save_path = "submission/mesh_eval/"
+
+                plt.imsave(f'{save_path}{step}{args.type}_w_smooth.png', rend)
+                render_mesh(predictions, src_path= f'{save_path}{step}{args.type}_w_smooth.gif')
+                render_mesh(mesh_gt, src_path=f'{save_path}{step}{args.type}_w_smooth_5_truth.gif')
 
         total_time = time.time() - start_time
         iter_time = time.time() - iter_start_time
