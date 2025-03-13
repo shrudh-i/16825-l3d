@@ -4,7 +4,8 @@ type: train
 
 training:
   num_epochs: 1000
-  batch_size: 4096
+  # batch_size: 4096
+  batch_size: 2048
   lr: 0.0005
 
 data:

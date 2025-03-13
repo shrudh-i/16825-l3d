@@ -116,10 +116,12 @@ def get_random_pixels_from_image(n_pixels, image_size, camera):
     # # Return
     # return xy_grid_sub.reshape(-1, 2)[:n_pixels]
     
-    indices = torch.randint(0, xy_grid.shape[0], (n_pixels,), device=xy_grid.device)
+    indices = torch.randint(0, xy_grid.shape[0], (n_pixels,))
     
     # Return the subsampled pixels
-    return xy_grid[indices]
+    # return xy_grid[indices].to("cuda")
+    # print(camera.device)
+    return xy_grid[indices].to(camera.device)
 
 
 # Get rays from pixel values
@@ -127,7 +129,9 @@ def get_rays_from_pixels(xy_grid, image_size, camera):
     W, H = image_size[0], image_size[1]
 
     # TODO (Q1.3): Map pixels to points on the image plane at Z=1
-    pass
+    # ndc_points = xy_grid.cuda()
+    ndc_points = xy_grid.to(camera.device).clone()
+
 
     ndc_points = torch.cat(
         [

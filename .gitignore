@@ -1,5 +1,7 @@
 # Ignore all dataset files
 assignment2/dataset/
+assignment3/data/
+assignment3/outputs/
 
 *pth
 

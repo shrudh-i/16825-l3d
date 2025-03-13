@@ -298,8 +298,81 @@ class NeuralRadianceField(torch.nn.Module):
         embedding_dim_xyz = self.harmonic_embedding_xyz.output_dim
         embedding_dim_dir = self.harmonic_embedding_dir.output_dim
 
-        pass
+        hidden_dims = [cfg.n_hidden_neurons_xyz, cfg.n_hidden_neurons_dir]
+        
+        # MLP for Spatial Coordinates
+        self.layers_xyz_init = torch.nn.Linear(embedding_dim_xyz, hidden_dims[0])
+        self.layers_xyz = torch.nn.ModuleList()
 
+        for i in range(cfg.n_layers_xyz):
+            if i == 0:
+                self.layers_xyz.append(self.layers_xyz_init)
+            elif i == 4: # skip connection 
+                self.layers_xyz.append(torch.nn.Linear(embedding_dim_xyz+hidden_dims[0], hidden_dims[0]))
+            else:
+                self.layers_xyz.append(torch.nn.Linear(hidden_dims[0], hidden_dims[0]))
+        self.relu = torch.nn.ReLU()
+
+        # Density Prediction (linear layer)
+        self.layer_sigma = torch.nn.Sequential(
+                torch.nn.Linear(hidden_dims[0], 1),
+                torch.nn.ReLU() # density should be non negative
+            )
+        
+        # Feature Processing for Color Prediction
+        self.layer_feature = torch.nn.Sequential(
+                torch.nn.Linear(hidden_dims[0], hidden_dims[0]),
+                torch.nn.ReLU()
+            )
+        
+        # MLP for Color Prediction
+            # Combines the direction embedding w/ spatial features -> predict RGB colors
+        self.layers_dir = torch.nn.Sequential(
+                torch.nn.Linear(embedding_dim_dir+hidden_dims[0], hidden_dims[1]),
+                torch.nn.ReLU(),
+                torch.nn.Linear(hidden_dims[1], 3),
+                torch.nn.Sigmoid()
+            )
+        
+        torch.nn.init.xavier_normal_(self.layers_xyz_init.weight)
+
+    def forward(self, ray_bundle):
+        # Get sample points and their harmonic embeddings
+        sample_points = ray_bundle.sample_points
+        embedded_points = self.harmonic_embedding_xyz(sample_points)
+
+        x = embedded_points
+
+        # Pass through the spatial MLP with skip connections
+        for i, layer in enumerate(self.layers_xyz):
+            if i == 0:
+                x = layer(x)
+            else:
+                if i == 4:  # Add skip connection at layer 4
+                    x = torch.cat((embedded_points, x), dim=-1)
+                x = layer(x)
+            
+            # Apply ReLU activation except for the last layer
+            if i != len(self.layers_xyz) - 1:
+                x = self.relu(x)
+
+        # Get sigma (density) and feature vector
+        sigma = self.layer_sigma(x)
+        feature = self.layer_feature(x)
+
+        # Process viewing direction
+        harmonic_embedding_dir = self.harmonic_embedding_dir(ray_bundle.directions).unsqueeze(1)
+        harmonic_embedding_dir = harmonic_embedding_dir.expand(-1, feature.shape[1], -1)
+
+        # Concatenate feature and direction embeddings
+        x = torch.cat((harmonic_embedding_dir, feature), dim=-1)
+        
+        # Pass through the direction-dependent MLP to get RGB color
+        rgb = self.layers_dir(x)
+
+        # Return density and color
+        res = {'density': sigma, 'feature': rgb}
+        return res
 
 class NeuralSurface(torch.nn.Module):
     def __init__(
