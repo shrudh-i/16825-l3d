@@ -18,13 +18,19 @@ def main():
 
     '''
     4. NeRF Extras
-    # TODO: add the command to run this
     '''
+    # subprocess.run(["python", "volume_rendering_main.py", "--config-name", "nerf_materials"])
+    # subprocess.run(["python", "volume_rendering_main.py", "--config-name", "nerf_materials_highres"])
 
     '''
     5. Sphere Tracing
     '''
     # subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "torus_surface"])
+
+    '''
+    6. Optimizing a Neural SDF
+    '''
+    subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "points_surface"])
 
 
 if __name__ == "__main__":

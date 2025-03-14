@@ -20,7 +20,7 @@ sampler:
   max_depth:
 
 training:
-  num_epochs: 5000
+  num_epochs: 5001
   pretrain_iters: 250
   batch_size: 4096
   lr: 0.0001
@@ -35,16 +35,16 @@ training:
   render_interval: 500
 
   inter_weight: 0.1
-  eikonal_weight: 0.02
+  eikonal_weight: 0.001
   bounds: [[-4, -4, -4], [4, 4, 4]]
 
 implicit_function:
   type: neural_surface
 
-  n_harmonic_functions_xyz: 4
+  n_harmonic_functions_xyz: 8
 
   n_layers_distance: 6
-  n_hidden_neurons_distance: 128
+  n_hidden_neurons_distance: 256
   append_distance: []
 
   n_layers_color: 2

@@ -293,10 +293,10 @@ class NeuralRadianceField(torch.nn.Module):
         super().__init__()
 
         self.harmonic_embedding_xyz = HarmonicEmbedding(3, cfg.n_harmonic_functions_xyz)
-        self.harmonic_embedding_dir = HarmonicEmbedding(3, cfg.n_harmonic_functions_dir)
+        self.harmonic_embedding_dir = HarmonicEmbedding(3, cfg.n_harmonic_functions_dir) #
 
         embedding_dim_xyz = self.harmonic_embedding_xyz.output_dim
-        embedding_dim_dir = self.harmonic_embedding_dir.output_dim
+        embedding_dim_dir = self.harmonic_embedding_dir.output_dim 
 
         hidden_dims = [cfg.n_hidden_neurons_xyz, cfg.n_hidden_neurons_dir]
         
@@ -322,17 +322,23 @@ class NeuralRadianceField(torch.nn.Module):
         # Feature Processing for Color Prediction
         self.layer_feature = torch.nn.Sequential(
                 torch.nn.Linear(hidden_dims[0], hidden_dims[0]),
-                torch.nn.ReLU()
+                torch.nn.ReLU(),
+                # View Dependence: uncomment the following two lines
+                torch.nn.Linear(hidden_dims[0], 3),  # Ensure output size is 3 for RGB
+                torch.nn.Sigmoid() # Apply Sigmoid to ensure RGB values are between 0 and 1
             )
         
-        # MLP for Directional Coordinates (view dependence)
-            # Combines the direction embedding w/ spatial features -> predict RGB colors
-        self.layers_dir = torch.nn.Sequential(
-                torch.nn.Linear(embedding_dim_dir+hidden_dims[0], hidden_dims[1]),
-                torch.nn.ReLU(),
-                torch.nn.Linear(hidden_dims[1], 3),
-                torch.nn.Sigmoid()
-            )
+        '''
+        Q4.1 View Dependence: MLP for Directional Coordinates
+            * Uncomment lines 336 - 341
+        '''
+        # Combines the direction embedding w/ spatial features -> predict RGB colors
+        # self.layers_dir = torch.nn.Sequential(
+        #         torch.nn.Linear(embedding_dim_dir+hidden_dims[0], hidden_dims[1]),
+        #         torch.nn.ReLU(),
+        #         torch.nn.Linear(hidden_dims[1], 3),
+        #         torch.nn.Sigmoid()
+        #     )
         
         torch.nn.init.xavier_normal_(self.layers_xyz_init.weight)
 
@@ -346,11 +352,12 @@ class NeuralRadianceField(torch.nn.Module):
         # Pass through the spatial MLP with skip connections
         for i, layer in enumerate(self.layers_xyz):
             if i == 0:
-                x = layer(x)
+                # x = layer(x)
+                x = embedded_points
             else:
                 if i == 4:  # Add skip connection at layer 4
                     x = torch.cat((embedded_points, x), dim=-1)
-                x = layer(x)
+            x = layer(x)
             
             # Apply ReLU activation except for the last layer
             if i != len(self.layers_xyz) - 1:
@@ -358,17 +365,25 @@ class NeuralRadianceField(torch.nn.Module):
 
         # Get sigma (density) and feature vector
         sigma = self.layer_sigma(x)
-        feature = self.layer_feature(x)
+        rgb = self.layer_feature(x) 
 
-        # Process viewing direction
-        harmonic_embedding_dir = self.harmonic_embedding_dir(ray_bundle.directions).unsqueeze(1)
-        harmonic_embedding_dir = harmonic_embedding_dir.expand(-1, feature.shape[1], -1)
+        '''
+        Q4.1 View Dependence: Process viewing direction
+            * Uncomment lines 374 - 386
+        '''
+        # feature = self.layer_feature(x)
+        # harmonic_embedding_dir = self.harmonic_embedding_dir(ray_bundle.directions).unsqueeze(1) #
+        # harmonic_embedding_dir = harmonic_embedding_dir.expand(-1, feature.shape[1], -1) #
 
         # Concatenate feature and direction embeddings
-        x = torch.cat((harmonic_embedding_dir, feature), dim=-1)
+        # x = torch.cat((harmonic_embedding_dir, feature), dim=-1)
         
         # Pass through the direction-dependent MLP to get RGB color
-        rgb = self.layers_dir(x)
+        # rgb = self.layers_dir(x) 
+
+        # Print the shapes of the outputs for debugging
+        # print("Sigma shape: ", sigma.shape)
+        # print("RGB shape: ", rgb.shape)
 
         # Return density and color
         res = {'density': sigma, 'feature': rgb}
@@ -393,11 +408,11 @@ class NeuralSurface(torch.nn.Module):
         self.n_layers_color = cfg.n_layers_color
 
         hidden_dims = [cfg.n_hidden_neurons_distance, cfg.n_hidden_neurons_color]
-        self.skip_ind = self.n_layers_distance//2
+        self.skip_ind = self.n_layers_dist//2
         self.layers_dist = torch.nn.ModuleList()
 
 
-        for layeri in range(self.n_layers_distance):
+        for layeri in range(self.n_layers_dist):
             if layeri == 0:
                 self.layers_dist.append(torch.nn.Linear(self.embedding_dim_xyz, hidden_dims[0]))
             elif layeri == self.skip_ind:
