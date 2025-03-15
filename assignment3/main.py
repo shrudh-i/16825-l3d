@@ -30,7 +30,12 @@ def main():
     '''
     6. Optimizing a Neural SDF
     '''
-    subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "points_surface"])
+    # subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "points_surface"])
+
+    '''
+    6. Optimizing a Neural SDF
+    '''
+    subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "volsdf_surface"])
 
 
 if __name__ == "__main__":

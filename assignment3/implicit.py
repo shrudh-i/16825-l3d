@@ -467,7 +467,19 @@ class NeuralSurface(torch.nn.Module):
             distance: N X 3 Tensor, where N is number of input points
         '''
         points = points.view(-1, 3)
-        pass
+        xyz = points.view(-1, 3)
+        h = self.harmonic_embedding_xyz(x)
+        for i, layer in enumerate(self.layers_dist):
+            if i == 0:
+                x = h
+            elif i == self.skip_ind:
+                x = torch.cat((x, h), dim=-1)
+            x = self.relu(layer(x))
+        x = torch.cat((x, xyz), dim=-1)
+        for i, layer in enumerate(self.rgb):
+            x = layer(x)
+
+        return x
     
     def get_distance_color(
         self,
@@ -481,6 +493,24 @@ class NeuralSurface(torch.nn.Module):
             but, depending on your MLP implementation, it maybe more efficient to share some computation
         '''
         
+        x = points.view(-1, 3)
+        xyz = points.view(-1, 3)
+        h = self.harmonic_embedding_xyz(x)
+        for i, layer in enumerate(self.layers_dist):
+            if i == 0:
+                x = h
+            elif i == self.skip_ind:
+                x = torch.cat((x, h), dim=-1)
+            x = layer(x)
+            x = self.relu(x)
+        distance =  self.layer_sigma(x)
+        x = torch.cat((x, xyz), dim=-1)
+        for i, layer in enumerate(self.rgb):
+            x = layer(x)
+        points = x
+
+        return distance, points
+
     def forward(self, points):
         return self.get_distance(points)
 
