@@ -82,11 +82,34 @@ class TorusSDF(torch.nn.Module):
             dim=-1
         )
         return (torch.linalg.norm(q, dim=-1) - self.radii[..., 1]).unsqueeze(-1)
+    
+class ComplexSceneSDF(torch.nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        
+        self.primitives = torch.nn.ModuleList([
+            SphereSDF(cfg.sun),
+            SphereSDF(cfg.planet1),
+            SphereSDF(cfg.planet2),
+            TorusSDF(cfg.orbit1),
+            TorusSDF(cfg.orbit2),
+            BoxSDF(cfg.satellite)
+        ])
+        
+    def forward(self, points):
+        points = points.view(-1, 3)
+        
+        distances = torch.stack([
+            primitive(points) for primitive in self.primitives
+        ], dim=-1)
+        
+        return torch.min(distances, dim=-1)[0]
 
 sdf_dict = {
     'sphere': SphereSDF,
     'box': BoxSDF,
     'torus': TorusSDF,
+    'complex_scene': ComplexSceneSDF
 }
 
 
@@ -185,6 +208,14 @@ class SDFSurface(torch.nn.Module):
                 0.02,
                 0.98
             )
+            # Uncomment for (Q8.1): For custom scene:
+            # base_color = torch.zeros_like(points)  # Initialize with zeros
+            # for primitive in self.sdf.primitives:
+            #     base_color += torch.clamp(
+            #         torch.abs(points - primitive.center),
+            #         0.02,
+            #         0.98
+            #     )
         else:
             base_color = 1.0
 
@@ -323,9 +354,9 @@ class NeuralRadianceField(torch.nn.Module):
         self.layer_feature = torch.nn.Sequential(
                 torch.nn.Linear(hidden_dims[0], hidden_dims[0]),
                 torch.nn.ReLU(),
-                # View Dependence: uncomment the following two lines
-                torch.nn.Linear(hidden_dims[0], 3),  # Ensure output size is 3 for RGB
-                torch.nn.Sigmoid() # Apply Sigmoid to ensure RGB values are between 0 and 1
+                # Without View Dependence: uncomment the following two lines
+                # torch.nn.Linear(hidden_dims[0], 3),  # Ensure output size is 3 for RGB
+                # torch.nn.Sigmoid() # Apply Sigmoid to ensure RGB values are between 0 and 1
             )
         
         '''
@@ -333,12 +364,12 @@ class NeuralRadianceField(torch.nn.Module):
             * Uncomment lines 336 - 341
         '''
         # Combines the direction embedding w/ spatial features -> predict RGB colors
-        # self.layers_dir = torch.nn.Sequential(
-        #         torch.nn.Linear(embedding_dim_dir+hidden_dims[0], hidden_dims[1]),
-        #         torch.nn.ReLU(),
-        #         torch.nn.Linear(hidden_dims[1], 3),
-        #         torch.nn.Sigmoid()
-        #     )
+        self.layers_dir = torch.nn.Sequential(
+                torch.nn.Linear(embedding_dim_dir+hidden_dims[0], hidden_dims[1]),
+                torch.nn.ReLU(),
+                torch.nn.Linear(hidden_dims[1], 3),
+                torch.nn.Sigmoid()
+            )
         
         torch.nn.init.xavier_normal_(self.layers_xyz_init.weight)
 
@@ -371,15 +402,15 @@ class NeuralRadianceField(torch.nn.Module):
         Q4.1 View Dependence: Process viewing direction
             * Uncomment lines 374 - 386
         '''
-        # feature = self.layer_feature(x)
-        # harmonic_embedding_dir = self.harmonic_embedding_dir(ray_bundle.directions).unsqueeze(1) #
-        # harmonic_embedding_dir = harmonic_embedding_dir.expand(-1, feature.shape[1], -1) #
+        feature = self.layer_feature(x)
+        harmonic_embedding_dir = self.harmonic_embedding_dir(ray_bundle.directions).unsqueeze(1) #
+        harmonic_embedding_dir = harmonic_embedding_dir.expand(-1, feature.shape[1], -1) #
 
         # Concatenate feature and direction embeddings
-        # x = torch.cat((harmonic_embedding_dir, feature), dim=-1)
+        x = torch.cat((harmonic_embedding_dir, feature), dim=-1)
         
         # Pass through the direction-dependent MLP to get RGB color
-        # rgb = self.layers_dir(x) 
+        rgb = self.layers_dir(x) 
 
         # Print the shapes of the outputs for debugging
         # print("Sigma shape: ", sigma.shape)
@@ -535,7 +566,6 @@ class NeuralSurface(torch.nn.Module):
             )[0]
         
         return distance, gradient
-
 
 implicit_dict = {
     'sdf_volume': SDFVolume,

@@ -418,6 +418,8 @@ def train_images(
                 pass
                 
 @hydra.main(config_path='configs', config_name='torus')
+# Uncomment for (Q8.1):
+# @hydra.main(config_path='configs', config_name='complex_scene')
 def main(cfg: DictConfig):
     os.chdir(hydra.utils.get_original_cwd())
 

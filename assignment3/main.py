@@ -33,9 +33,16 @@ def main():
     # subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "points_surface"])
 
     '''
-    6. Optimizing a Neural SDF
+    7. VolSDF
     '''
-    subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "volsdf_surface"])
+    # subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "volsdf_surface"])
+
+    '''
+    8.1. Render a Large Scene with Sphere Tracing
+            * Make sure to uncomment the necessary lines in `surface_rendering_main.py` & 'implicit.py' to enable the large scene rendering.
+    '''
+    # subprocess.run(["python", "-m", "surface_rendering_main", "--config-name", "custom_surface"])
+
 
 
 if __name__ == "__main__":
