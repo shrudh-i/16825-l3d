@@ -27,9 +27,11 @@ class Gaussians:
             if load_path is None:
                 raise ValueError
 
+            # loading pre-trained gaussians
             data, is_isotropic = self._load_gaussians(load_path)
             self.is_isotropic = is_isotropic
 
+        # creating gaussians from a point cloud
         elif init_type == "points":
             if isotropic is not None and type(isotropic) is not bool:
                 raise TypeError("isotropic must be either None or True or False.")
@@ -43,6 +45,7 @@ class Gaussians:
 
             data = self._load_points(load_path)
 
+        # randonly generating gaussians
         elif init_type == "random":
             if isotropic is not None and type(isotropic) is not bool:
                 raise TypeError("isotropic must be either None or True or False.")
@@ -152,6 +155,7 @@ class Gaussians:
 
         return data
 
+    # computes the jacobian of the projection
     def _compute_jacobian(self, means_3D: torch.Tensor, camera: PerspectiveCameras, img_size: Tuple):
 
         if camera.in_ndc():
@@ -236,15 +240,36 @@ class Gaussians:
         # HINT: Are quats ever used or optimized for isotropic gaussians? What will their value be?
         # Based on your answers, can you write a more efficient code for the isotropic case?
         if self.is_isotropic:
-
             ### YOUR CODE HERE ###
-            cov_3D = None  # (N, 3, 3)
+            # here all three scale values are the same
+            N = scales.shape[0]
+
+            # square the scales to get variance
+            variance = scales ** 2
+
+            cov_3D = torch.eye(3, device=scales.device).unsqueeze(0).repeat(N, 1, 1) # final dimension (N, 3, 3)
+
+            cov_3D = cov_3D * variance.view(N,1,1)  # (N, 3, 3)
 
         # HINT: You can use a function from pytorch3d to convert quaternions to rotation matrices.
         else:
-
             ### YOUR CODE HERE ###
-            cov_3D = None  # (N, 3, 3)
+            # here we need to apply the full transformation
+            N = quats.shape[0]
+
+            from pytorch3d.transforms import quaternion_to_matrix
+            R = quaternion_to_matrix(quats) # (N, 3, 3)
+
+            # CREATE SCALING MATRICES (diag matrices with scales on the diagonal)
+            # (1) square the scales to get variance
+            S_variance = scales ** 2 # (N, 3)
+
+            # (2) create diagonal matrices
+            S = torch.diag_embed(S_variance) # (N, 3, 3)
+            
+            # Compute covariance: Σ = R * S * S^T * R^T = R * S * R^T [FROM THE PAPER]
+            # S * S^T = S (in this implementation)
+            cov_3D = torch.bmm(R, torch.bmm(S, R.transpose(1,2)))  # (N, 3, 3)
 
         return cov_3D
 
@@ -270,21 +295,40 @@ class Gaussians:
             cov_3D  :   A torch.Tensor of shape (N, 3, 3)
         """
         ### YOUR CODE HERE ###
+        '''
+        Equation (5) from the paper: Σ' = JWΣ(JW)ᵀ
+            * Σ -> 3D covariance matrix
+            * W -> world to camera rotation matrix
+            * J -> jacobian of the projection
+        '''
+
+        # 1. compute the jacobian of the projection 
         # HINT: For computing the jacobian J, can you find a function in this file that can help?
-        J = None  # (N, 2, 3)
+        J = self._compute_jacobian(means_3D, camera, img_size)  # (N, 2, 3)
 
         ### YOUR CODE HERE ###
+        # 2. get the world-to-camera rotation matrix W
         # HINT: Can you extract the world to camera rotation matrix (W) from one of the inputs
         # of this function?
-        W = None  # (N, 3, 3)
+        view_transform = camera.get_world_to_view_transform()
+        W = view_transform.get_matrix()[:3, :3] # (3, 3)
+        # Expand to match the batch size (N, 3, 3)
+        W = W.unsqueeze(0).expand(means_3D.shape[0], 3, 3)  # (N, 3, 3)
 
         ### YOUR CODE HERE ###
+        # 3. compute the 3D covariance matrix Σ
         # HINT: Can you find a function in this file that can help?
-        cov_3D = None  # (N, 3, 3)
+        cov_3D = self.compute_cov_3D(quats, scales)  # (N, 3, 3)
 
         ### YOUR CODE HERE ###
+        # 4. compute the 2D covariance matrix Σ'
+        JW = torch.bmm(J, W)  # (N, 2, 3)
+
+        # Now, JW * Σ * (JW)^T
+        JW_Σ = torch.bmm(JW, cov_3D)  # (N, 2, 3)
+
         # HINT: Use the above three variables to compute cov_2D
-        cov_2D = None  # (N, 2, 2)
+        cov_2D = torch.bmm(JW_Σ, JW.transpose(1,2))  # (N, 2, 2)
 
         # Post processing to make sure that each 2D Gaussian covers atleast approximately 1 pixel
         cov_2D[:, 0, 0] += 0.3
@@ -292,6 +336,8 @@ class Gaussians:
 
         return cov_2D
 
+    # projects the 3D gaussian centers onto the 2D image plane
+    # projection is a standard perspective projection
     @staticmethod
     def compute_means_2D(means_3D: torch.Tensor, camera: PerspectiveCameras):
         """
@@ -309,7 +355,17 @@ class Gaussians:
         ### YOUR CODE HERE ###
         # HINT: Do note that means_2D have units of pixels. Hence, you must apply a
         # transformation that moves points in the world space to screen space.
-        means_2D = None  # (N, 2)
+        '''
+        [BASED ON THE PAPER] Approach to transform points from the world space to sceen space (in pixels)
+            1. world to camera space
+            2. perspective projection
+            3. normalized device coordinates (NDC) to screen coordinates
+        '''
+
+        screen_points = camera.transform_points_screen(means_3D,
+                                                       image_size=((camera.image_size[0], camera.image_size[1]),)) # (N, 3)
+
+        means_2D = screen_points[..., :2]  # (N, 2)
         return means_2D
 
     @staticmethod
@@ -361,6 +417,7 @@ class Gaussians:
 
         return power
 
+    # Applies activation functions to convert raw parameters to their final form
     @staticmethod
     def apply_activations(pre_act_quats, pre_act_scales, pre_act_opacities):
 
@@ -401,6 +458,7 @@ class Scene:
 
         return z_vals
 
+    # Filters and sorts Gaussians by depth
     def get_idxs_to_filter_and_sort(self, z_vals: torch.Tensor):
         """
         Given depth values of Gaussians, return the indices to depth-wise sort
@@ -422,6 +480,7 @@ class Scene:
 
         return idxs
 
+    # Computes the alpha (opacity) values for each Gaussian at each pixel
     def compute_alphas(self, opacities, means_2D, cov_2D, img_size):
         """
         Given some parameters of N ordered Gaussians, this function computes
@@ -524,6 +583,7 @@ class Scene:
 
         return transmittance
 
+    # Core methods: Splats Gaussians to the image plane
     def splat(
         self, camera: PerspectiveCameras, means_3D: torch.tensor, z_vals: torch.Tensor,
         quats: torch.Tensor, scales: torch.Tensor, colours: torch.Tensor,
@@ -608,6 +668,7 @@ class Scene:
         final_transmittance = transmittance[-1, ..., 0].unsqueeze(0)  # (1, H, W)
         return image, depth, mask, final_transmittance
 
+    # Main method: Handles batching and calls splat
     def render(
         self, camera: PerspectiveCameras,
         per_splat: int = -1, img_size: Tuple = (256, 256),
@@ -714,6 +775,7 @@ class Scene:
 
         return image, depth, mask
 
+    # Computes directional vectors from camera to gaussians (for spherical harmonics)
     def calculate_gaussian_directions(self, means_3D, camera):
         """
         [Q 1.3.1] Calculates the world frame direction vectors that point from the
@@ -733,3 +795,20 @@ class Scene:
         # HINT: Do not forget to normalize the computed directions.
         gaussian_dirs = None  # (N, 3)
         return gaussian_dirs
+
+'''
+Core Algorithm
+The rendering process works as follows:
+
+1. Initialize Gaussians either from a file, point cloud, or randomly
+2. Sort Gaussians by depth (front to back or back to front)
+3. For each Gaussian:
+    * Project its mean from 3D to 2D
+    * Project its covariance from 3D to 2D
+    * Compute alpha values at each pixel (how much this Gaussian contributes)
+    * Compute transmittance (how much light passes through)
+    * Blend colors based on alpha and transmittance
+
+
+4. Compose the final image, depth map, and silhouette mask
+'''
