@@ -311,9 +311,15 @@ class Gaussians:
         # HINT: Can you extract the world to camera rotation matrix (W) from one of the inputs
         # of this function?
         view_transform = camera.get_world_to_view_transform()
-        W = view_transform.get_matrix()[:3, :3] # (3, 3)
+        #OLD W = view_transform.get_matrix()[:3, :3] # (3, 3)
+
+        # to account for input shape
+        W_full = view_transform.get_matrix()
+        
+        # extract the rotation part
+        W = W_full[..., :3, :3]
         # Expand to match the batch size (N, 3, 3)
-        W = W.unsqueeze(0).expand(means_3D.shape[0], 3, 3)  # (N, 3, 3)
+        W = W.expand(means_3D.shape[0], 3, 3)  # (N, 3, 3)
 
         ### YOUR CODE HERE ###
         # 3. compute the 3D covariance matrix Σ
@@ -362,8 +368,9 @@ class Gaussians:
             3. normalized device coordinates (NDC) to screen coordinates
         '''
 
-        screen_points = camera.transform_points_screen(means_3D,
-                                                       image_size=((camera.image_size[0], camera.image_size[1]),)) # (N, 3)
+        # screen_points = camera.transform_points_screen(means_3D,
+        #                                                image_size=((camera.image_size[0], camera.image_size[1]),)) # (N, 3)
+        screen_points = camera.transform_points_screen(means_3D) # (N, 3)
 
         means_2D = screen_points[..., :2]  # (N, 2)
         return means_2D
@@ -412,8 +419,43 @@ class Gaussians:
                                 power of the N 2D Gaussians at every pixel location in an image.
         """
         ### YOUR CODE HERE ###
+        '''
+        shapes of the inputs (my reference):
+            * points_2D -> (1, H*W, 2)
+            * means_2D -> (N, 1, 2)
+            * cov_2D_inverse -> (N, 2, 2)
+        
+        shape of the output:
+            * power -> (N, H*W) [with the computed power for each gaussian at each pixel location]
+        '''
+
+        # 1. difference between each pixel coord & gaussian mean -> (N, H*W, 2)
+        diff = points_2D - means_2D  # (N, H*W, 2)
+
+        # 2. compute (x - μ)^T Σ^(-1) (x - μ), for each pixel
+        
+        # reshape it for matrix multiplicationss
+        diff_reshaped = diff.unsqueeze(-1) # (N, H*W, 2, 1)
+
+        # multiply by cov_2D_inverse (N, 2, 2) [Σ^(-1)]
+        # reshape cov_2D_inverse to (N, 1, 2, 2) for broadcasting across all pixels
+        cov_2D_inverse_reshaped = cov_2D_inverse.unsqueeze(1) # (N, 1, 2, 2)
+
+        # Σ^(-1)(x - μ) -> (N,H*W,2,1)
+        intermediate = torch.matmul(cov_2D_inverse_reshaped, diff_reshaped) # (N, H*W, 2, 1)
+
+        # transpose diff to get (x-μ)^T -> (N, H*W, 1, 2)
+        diff_transpose = diff.unsqueeze(-2) # (N, H*W, 1, 2)
+
+        # final multiplication
+        result = torch.matmul(diff_transpose, intermediate) # (N, H*W, 1, 1)
+
+        # reshape result to (N, H*W)
+        result = result.squeeze(-1).squeeze(-1) # (N, H*W)
+
         # HINT: Refer to README for a relevant equation
-        power = None  # (N, H*W)
+        # multiply by -0.5 (as defined by the eq in the README)
+        power = -0.5 * result # (N, H*W)
 
         return power
 
