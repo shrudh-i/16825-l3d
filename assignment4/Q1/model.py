@@ -474,6 +474,11 @@ class Gaussians:
 
         return quats, scales, opacities
 
+'''
+Note to self:
+    * before starting with the rasterization process:
+        * sort the 3D gaussians in increasing order by their depth value + discard <0 depth values
+'''
 class Scene:
 
     def __init__(self, gaussians: Gaussians):
@@ -494,9 +499,18 @@ class Scene:
             z_vals  :   A torch.Tensor of shape (N,) with the depth of each 3D Gaussian.
         """
         ### YOUR CODE HERE ###
+        # need to calculate the z of each 3D gaussian (rel to the camera) -> crucial for proper depth ordering during rendering
+
         # HINT: You can use get the means of 3D Gaussians self.gaussians and calculate
         # the depth using the means and the camera
-        z_vals = None  # (N,)
+        means_3D = self.gaussians.means # (N, 3)
+
+        # transform points from world frame to camera frame
+        view_transform = camera.get_world_to_view_transform()
+        means_view_space = view_transform.transform_points(means_3D) # (N, 3)
+
+        # extract the z values (representing depth in the camera frame)
+        z_vals = means_view_space[:, 2]  # (N,)
 
         return z_vals
 
@@ -517,8 +531,26 @@ class Scene:
 
         Please refer to the README file for more details.
         """
+        
         ### YOUR CODE HERE ###
-        idxs = None  # (N,)
+        '''
+            1. filter gaussians with -ve depth values (behind the camera)
+            2. sort the remaining gaussians in increasing order of depth (front to back)
+            3. return indices that can be used to access this sorted list of gaussians
+        '''
+        
+        # 1. filter gaussians with -ve depth values
+        valid_mask = z_vals >= 0  # (N,)
+        valid_indices = torch.where(valid_mask)[0]  # (N,)
+        
+        # get the valid depth values
+        valid_zs = z_vals[valid_indices]  # (N,)
+        
+        # 2. sort the remaining gaussians in increasing order of depth
+        sorted_indices = torch.argsort(valid_zs)  # (N,)
+
+        # 3. return indices that can be used to access this sorted list of gaussians
+        idxs = valid_indices[sorted_indices].to(torch.int64)  # (N,)
 
         return idxs
 
