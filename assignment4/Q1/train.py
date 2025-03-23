@@ -15,7 +15,19 @@ def make_trainable(gaussians):
 
     ### YOUR CODE HERE ###
     # HINT: You can access and modify parameters from gaussians
-    pass
+    # Making all parameters trainable by setting requires_grad=True
+    gaussians.means.requires_grad = True 
+    gaussians.pre_act_scales.requires_grad = True
+    gaussians.pre_act_opacities.requires_grad = True
+    gaussians.colours.requires_grad = True
+
+    '''
+    note:
+        * means -> centre positions of the gaussians in space
+        * pre_act_scales -> controls the size of the gaussians
+        * pre_act_opacities -> controls the opacity of the gaussians
+        * colours -> controls the colour (RGB) of the gaussians
+    '''
 
 def setup_optimizer(gaussians):
 
@@ -27,6 +39,8 @@ def setup_optimizer(gaussians):
     # HINT: Consider reducing the learning rates for parameters that seem to vary too
     # fast with the default settings.
     # HINT: Consider setting different learning rates for different sets of parameters.
+    '''
+    DEFAULT:
     parameters = [
         {'params': [gaussians.pre_act_opacities], 'lr': 0.05, "name": "opacities"},
         {'params': [gaussians.pre_act_scales], 'lr': 0.05, "name": "scales"},
@@ -35,8 +49,34 @@ def setup_optimizer(gaussians):
     ]
     optimizer = torch.optim.Adam(parameters, lr=0.0, eps=1e-15)
     optimizer = None
+    '''
+    parameters = [
+        {'params': [gaussians.pre_act_opacities], 'lr': 0.05, "name": "opacities"},
+        {'params': [gaussians.pre_act_scales], 'lr': 0.02, "name": "scales"},
+        {'params': [gaussians.colours], 'lr': 0.05, "name": "colours"},
+        {'params': [gaussians.means], 'lr': 0.005, "name": "means"},
+    ]
+    optimizer = torch.optim.Adam(parameters, lr=0.0, eps=1e-15)
+    optimizer = None
 
     return optimizer
+
+'''
+#NOTE: My addition to the implementation
+def setup_scheduler(optimizer):
+    # The ReduceLROnPlateau scheduler will reduce learning rates when the loss plateaus
+    # - 'mode': 'min' because we want to minimize the loss
+    # - 'factor': 0.5 means the learning rate will be halved when triggered
+    # - 'patience': 50 means it will wait 50 iterations before reducing LR if no improvement
+    # - 'threshold': 0.01 is the minimum improvement needed to be considered progress
+    # - 'verbose': True means it will print a message when LR is reduced
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=50, 
+        threshold=0.01, verbose=True
+    )
+
+    return scheduler
+'''
 
 def run_training(args):
 
@@ -78,6 +118,12 @@ def run_training(args):
     # Making gaussians trainable and setting up optimizer
     make_trainable(gaussians)
     optimizer = setup_optimizer(gaussians)
+    '''
+    #NOTE: My addition to the implementation
+    # scheduler = setup_scheduler(optimizer)
+    # # For tracking loss history (useful for debugging)
+    # loss_history = []
+    '''
 
     # Training loop
     viz_frames = []
@@ -104,16 +150,59 @@ def run_training(args):
         # HINT: Get img_size from train_dataset
         # HINT: Get per_splat from args.gaussians_per_splat
         # HINT: camera is available above
-        pred_img = None
+        pred_img = scene.render(
+            camera = camera,
+            img_size = train_dataset.img_size,
+            per_splat = args.gaussians_per_splat,
+            bg_colour = (0.0, 0.0, 0.0)
+        )
 
         # Compute loss
         ### YOUR CODE HERE ###
         # HINT: A simple standard loss function should work.
-        loss = None
+        loss = torch.abs(pred_img - gt_img).mean()
+        
+        '''
+        #NOTE: My addition to the implementation
+        # loss_history.append(loss.item())
+        # # Check for NaN values (debugging)
+        # if torch.isnan(loss):
+        #     print("Warning: NaN loss detected! Skipping this iteration.")
+        #     optimizer.zero_grad()
+        #     continue
+        '''
+        
+        '''
+        #NOTE: My addition to the implementation
+        if itr % 20 == 0:  # Periodically check parameters for NaN
+            if torch.isnan(gaussians.means).any():
+                print("Warning: NaN values detected in Gaussian means")
+            if torch.isnan(gaussians.pre_act_scales).any():
+                print("Warning: NaN values detected in Gaussian scales")
+            if torch.isnan(gaussians.pre_act_opacities).any():
+                print("Warning: NaN values detected in Gaussian opacities")
+            if torch.isnan(gaussians.colours).any():
+                print("Warning: NaN values detected in Gaussian colours")
+        '''
+
 
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
+        '''
+        #NOTE: My addition to the implementation
+        # scheduler.step(loss)
+
+        ///////////////////
+        # Calculate and report PSNR during training for better monitoring
+        if itr % 20 == 0:
+            with torch.no_grad():
+                mse = ((pred_img - gt_img) ** 2).mean()
+                psnr = -10 * torch.log10(mse)
+                print(f"[*] Itr: {itr:07d} | Loss: {loss.item():0.5f} | PSNR: {psnr.item():0.3f}")
+        else:
+            print(f"[*] Itr: {itr:07d} | Loss: {loss.item():0.5f}")
+        '''
 
         print(f"[*] Itr: {itr:07d} | Loss: {loss:0.3f}")
 
@@ -125,6 +214,18 @@ def run_training(args):
             viz_frames.append(viz_frame)
 
     print("[*] Training Completed.")
+
+    '''
+    #NOTE: My addition to the implementation
+    # Save loss history for analysis (optional)
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 5))
+    plt.plot(loss_history)
+    plt.title('Training Loss Over Time')
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.savefig(os.path.join(args.out_path, training_loss.png"))
+    '''
 
     # Saving training progess GIF
     imageio.mimwrite(viz_gif_path_1, viz_frames, loop=0, duration=(1/10.0)*1000)
@@ -151,7 +252,12 @@ def run_training(args):
             # HINT: Get img_size from train_dataset
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = None
+            pred_img = scene.render(
+                camera = camera,
+                img_size = train_dataset.img_size,
+                per_splat = args.gaussians_per_splat,
+                bg_colour = (0.0, 0.0, 0.0)
+            )
 
         pred_npy = pred_img.detach().cpu().numpy()
         pred_npy = (np.clip(pred_npy, 0.0, 1.0) * 255.0).astype(np.uint8)
@@ -179,7 +285,12 @@ def run_training(args):
             # HINT: Get img_size from test_dataset
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = None
+            pred_img = scene.render(
+                camera = camera,
+                img_size = test_dataset.img_size, #NOTE: using test dataset image size jere
+                per_splat = args.gaussians_per_splat,
+                bg_colour = (0.0, 0.0, 0.0)
+            )
 
             gt_npy = gt_img.detach().cpu().numpy()
             pred_npy = pred_img.detach().cpu().numpy()
