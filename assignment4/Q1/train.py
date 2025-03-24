@@ -265,7 +265,7 @@ def run_training(args):
         
         #NOTE: My addition to the implementation
         # Save checkpoint periodically
-        if itr % (args.checkpoint_freq + 1) == 0:
+        if (itr+1) % args.checkpoint_freq == 0:
             save_checkpoint(gaussians, optimizer, itr, loss, args)
 
         '''
