@@ -10,6 +10,20 @@ from torch.utils.data import Dataset
 from pytorch3d.renderer.cameras import PerspectiveCameras, look_at_view_transform
 
 SH_C0 = 0.28209479177387814
+# add the rest of the SH coefficients from the reference
+SH_C1 = 0.4886025119029199
+SH_C2_0 = 1.0925484305920792
+SH_C2_1 = -1.0925484305920792
+SH_C2_2 = 0.31539156525252005
+SH_C2_3 = -1.0925484305920792
+SH_C2_4 = 0.5462742152960396
+SH_C3_0 = -0.5900435899266435
+SH_C3_1 = 2.890611442640554
+SH_C3_2 = -0.4570457994644658
+SH_C3_3 = 0.3731763325901154
+SH_C3_4 = -0.4570457994644658
+SH_C3_5 = 1.445305721320277
+SH_C3_6 = -0.5900435899266435
 CMAP_JET = plt.get_cmap("jet")
 CMAP_MIN_NORM, CMAP_MAX_NORM = 5.0, 7.0
 
@@ -193,119 +207,36 @@ def load_gaussians_from_ply(path):
     }
     return output
 
-# def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
-#     """
-#     [Q 1.3.1] Computes view-dependent colour given spherical harmonic coefficients
-#     and direction vectors for each gaussian.
-
-#     Args:
-#         spherical_harmonics     :   A torch.Tensor of shape (N, 48) representing the
-#                                     spherical harmonic coefficients.
-#         gaussian_dirs           :   A torch.Tensor of shape (N, 3) representing the
-#                                     direction vectors pointing from the camera origin
-#                                     to each Gaussian.
-
-#     Returns:
-#         colours                 :   A torch.Tensor of shape (N, 3) representing the view dependent
-#                                     RGB colour.
-#     """
-#     ### YOUR CODE HERE ###
-#     '''
-#     Input shapes:
-#         * spherical_harmonics: (N, 48)
-#         * gaussian_dirs: (N, 3)
-#     Output shapes:
-#         * colours: (N, 3)
-#     '''
-
-#      # Base color computation
-#     c0 = spherical_harmonics[:, 0:3]
-#     color = SH_C0 * c0
-
-#     # Extract direction components
-#     x = gaussian_dirs[:, 0]
-#     y = gaussian_dirs[:, 1]
-#     z = gaussian_dirs[:, 2]
-    
-#     # Precompute squared and product terms
-#     xx, yy, zz = x * x, y * y, z * z
-#     xy, yz, xz = x * y, y * z, x * z
-
-#     # First-order terms
-#     color = color - \
-#             y * spherical_harmonics[:, 3:6] + \
-#             z * spherical_harmonics[:, 6:9] - \
-#             x * spherical_harmonics[:, 9:12]
-
-#     # Second-order terms
-#     color = color + \
-#             xy * spherical_harmonics[:, 12:15] + \
-#             yz * spherical_harmonics[:, 15:18] + \
-#             (2.0 * zz - xx - yy) * spherical_harmonics[:, 18:21] + \
-#             xz * spherical_harmonics[:, 21:24] + \
-#             (xx - yy) * spherical_harmonics[:, 24:27]
-
-#     # Third-order terms
-#     color = color + \
-#              y * (3.0 * xx - yy) * spherical_harmonics[:, 27:30] + \
-#              xy * z * spherical_harmonics[:, 30:33] + \
-#              y * (4.0 * zz - xx - yy) * spherical_harmonics[:, 33:36] + \
-#              z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * spherical_harmonics[:, 36:39] + \
-#              x * (4.0 * zz - xx - yy) * spherical_harmonics[:, 39:42] + \
-#              z * (xx - yy) * spherical_harmonics[:, 42:45] + \
-#              x * (xx - 3.0 * yy) * spherical_harmonics[:, 45:48]
-
-#     # Final normalization
-#     colours = color + 0.5
-#     colours = torch.clip(colours, 0.0, 1.0)
-#     return colours
-
-# TEMPORARY DEBUG
 def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
     """
-    [Q 1.3.1] Computes view-dependent colour given spherical harmonic coefficients
-    and direction vectors for each gaussian.
+    Computes view-dependent colours using vectorized spherical harmonic coefficients computation.
 
     Args:
-        spherical_harmonics     :   A torch.Tensor of shape (N, 48) representing the
-                                    spherical harmonic coefficients.
-        gaussian_dirs           :   A torch.Tensor of shape (N, 3) representing the
-                                    direction vectors pointing from the camera origin
-                                    to each Gaussian.
+        spherical_harmonics (torch.Tensor): Spherical harmonic coefficients of shape (N, 48)
+        gaussian_dirs (torch.Tensor): Direction vectors of shape (N, 3)
 
     Returns:
-        colours                 :   A torch.Tensor of shape (N, 3) representing the view dependent
-                                    RGB colour.
+        torch.Tensor: View-dependent RGB colours of shape (N, 3)
     """
-    ### YOUR CODE HERE ###
-    c0 = spherical_harmonics[:, 0:3]
-    color = SH_C0 * c0
-    # Add the first order spherical harmonics
-    c1 = spherical_harmonics[:, 3:6]
+    # Unpack direction components for vectorized computation
+    x, y, z = gaussian_dirs[:, 0], gaussian_dirs[:, 1], gaussian_dirs[:, 2]
+
+    # Prepare spherical harmonic coefficients
+    c0 = spherical_harmonics[:, 0:3]  # Constant term
+    
+    # First-order terms
+    c1 = spherical_harmonics[:, 3:6]   # y, z, -x directions
     c2 = spherical_harmonics[:, 6:9]
     c3 = spherical_harmonics[:, 9:12]
-    x = gaussian_dirs[0]
-    y = gaussian_dirs[1]
-    z = gaussian_dirs[2]
-    color = color - y * c1 + z * c2 - x * c3
 
-    # Add the second order spherical harmonics
-    c4 = spherical_harmonics[:, 12:15]
+    # Second-order terms
+    c4 = spherical_harmonics[:, 12:15]   # xy, yz, (2z² - x² - y²)
     c5 = spherical_harmonics[:, 15:18]
     c6 = spherical_harmonics[:, 18:21]
     c7 = spherical_harmonics[:, 21:24]
     c8 = spherical_harmonics[:, 24:27]
-    
-    (xx, yy, zz) = (x * x, y * y, z * z)
-    (xy, yz, xz) = (x * y, y * z, x * z)
-    
-    color = color +	xy * c4 + \
-        yz * c5 + \
-        (2.0 * zz - xx - yy) * c6 + \
-        xz * c7 + \
-        (xx - yy) * c8
-    
-    # Add the third order spherical harmonics
+
+    # Third-order terms
     c9 = spherical_harmonics[:, 27:30]
     c10 = spherical_harmonics[:, 30:33]
     c11 = spherical_harmonics[:, 33:36]
@@ -313,16 +244,36 @@ def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
     c13 = spherical_harmonics[:, 39:42]
     c14 = spherical_harmonics[:, 42:45]
     c15 = spherical_harmonics[:, 45:48]
-    
-    color = color + \
-        y * (3.0 * xx - yy) * c9 + \
-        xy * z * c10 + \
-        y * (4.0 * zz - xx - yy) * c11 + \
-        z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * c12 + \
-        x * (4.0 * zz - xx - yy) * c13 + \
-        z * (xx - yy) * c14 + \
-        x * (xx - 3.0 * yy) * c15
-        
-    colours = color + 0.5
 
+    # Precompute direction products for efficiency
+    xx, yy, zz = x * x, y * y, z * z
+    xy, yz, xz = x * y, y * z, x * z
+
+    # Compute colour using vectorized operations
+    color = (
+        # Constant and first-order terms
+        c0 * 0.28209479177387814 -
+        y * c1 +
+        z * c2 -
+        x * c3 +
+
+        # Second-order terms
+        xy * c4 +
+        yz * c5 +
+        (2.0 * zz - xx - yy) * c6 +
+        xz * c7 +
+        (xx - yy) * c8 +
+
+        # Third-order terms
+        y * (3.0 * xx - yy) * c9 +
+        xy * z * c10 +
+        y * (4.0 * zz - xx - yy) * c11 +
+        z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * c12 +
+        x * (4.0 * zz - xx - yy) * c13 +
+        z * (xx - yy) * c14 +
+        x * (xx - 3.0 * yy) * c15
+    )
+
+    # Final colour computation
+    colours = color + 0.5
     return torch.clip(colours, 0.0, 1.0)
