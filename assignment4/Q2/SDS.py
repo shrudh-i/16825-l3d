@@ -151,19 +151,45 @@ class SDS:
         # predict the noise residual with unet, NO grad!
         with torch.no_grad():
             ### YOUR CODE HERE ###
- 
 
+            # add noise to the input latents according to the timestep
+            noise = torch.randn_like(latents)
+            latents_noisy = self.scheduler.add_noise(latents, noise, t)
+
+            # Predict the noise using the UNet with the conditional text embedding
+            noise_pred = self.unet(
+                latents_noisy, t, encoder_hidden_states=text_embeddings
+            ).sample
+ 
+            # Using classifier-free guidance (mixing the conditional and unconditional predictions)
             if text_embeddings_uncond is not None and guidance_scale != 1:
                 ### YOUR CODE HERE ###
-                pass
- 
+                # Concat unconditional and conditional embeddings
+                text_embeddings_concat = torch.cat([text_embeddings_uncond, text_embeddings])
+
+                # Get noise prediction for both conditional and unconditional
+                latents_noisy_expanded = torch.cat([latents_noisy] * 2)
+                t_expanded = torch.cat([t] * 2)
+
+                # Concat the embeddings for both conditional (positive prompt) and unconditional (negative prompt)
+                noise_pred_concat = self.unet(
+                    latents_noisy_expanded, t_expanded, encoder_hidden_states=text_embeddings_concat
+                ).sample
+
+                # Split the predictions
+                noisy_pred_uncond, noisy_pred_cond = noise_pred_concat.chunk(2)
+
+                # Apply classifier-free guidance
+                noise_pred = noisy_pred_uncond + guidance_scale * (noisy_pred_cond - noisy_pred_uncond)
 
 
         # Compute SDS loss
         w = 1 - self.alphas[t]
         ### YOUR CODE HERE ###
 
+        # Scale gradients by noise levels (w) as described in the paper
+        grad = w[:, None, None, None] * (noise_pred - noise) * grad_scale
 
-        loss = 
+        loss = torch.nn.functional.mse_loss(grad, torch.zeros_like(grad))
 
         return loss
