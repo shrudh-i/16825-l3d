@@ -130,7 +130,7 @@ def run_training(args):
 
     # Training loop
     viz_frames = []
-    for itr in tqdm(range(args.num_itrs)):
+    for itr in range(args.num_itrs):
 
         # Fetching data
         try:
