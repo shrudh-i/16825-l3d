@@ -232,19 +232,22 @@ def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
     xy, yz, xz = x * y, y * z, x * z
 
     # First-order terms
-    color -= y * spherical_harmonics[:, 3:6] - \
-             z * spherical_harmonics[:, 6:9] + \
-             x * spherical_harmonics[:, 9:12]
+    color = color - \
+            y * spherical_harmonics[:, 3:6] + \
+            z * spherical_harmonics[:, 6:9] - \
+            x * spherical_harmonics[:, 9:12]
 
     # Second-order terms
-    color += xy * spherical_harmonics[:, 12:15] + \
-             yz * spherical_harmonics[:, 15:18] + \
-             (2.0 * zz - xx - yy) * spherical_harmonics[:, 18:21] + \
-             xz * spherical_harmonics[:, 21:24] + \
-             (xx - yy) * spherical_harmonics[:, 24:27]
+    color = color + \
+            xy * spherical_harmonics[:, 12:15] + \
+            yz * spherical_harmonics[:, 15:18] + \
+            (2.0 * zz - xx - yy) * spherical_harmonics[:, 18:21] + \
+            xz * spherical_harmonics[:, 21:24] + \
+            (xx - yy) * spherical_harmonics[:, 24:27]
 
     # Third-order terms
-    color += y * (3.0 * xx - yy) * spherical_harmonics[:, 27:30] + \
+    color = color + \
+             y * (3.0 * xx - yy) * spherical_harmonics[:, 27:30] + \
              xy * z * spherical_harmonics[:, 30:33] + \
              y * (4.0 * zz - xx - yy) * spherical_harmonics[:, 33:36] + \
              z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * spherical_harmonics[:, 36:39] + \
