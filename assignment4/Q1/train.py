@@ -24,11 +24,16 @@ def save_checkpoint(gaussians, optimizer, itr, loss, args):
         'optimizer_state': optimizer.state_dict(),
         'loss': loss.item()
     }
-    checkpoint_path = os.path.join(args.out_path, f"/checkpoints/checkpoint_{itr:07d}.pt")
+
+    # Create checkpoints directory if it doesn't exist
+    checkpoint_dir = os.path.join(args.out_path, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_{itr:07d}.pt")
     torch.save(checkpoint, checkpoint_path)
     
     # Save the latest checkpoint path to a small file for easy retrieval
-    with open(os.path.join(args.out_path, "latest_checkpoint.txt"), "w") as f:
+    with open(os.path.join(checkpoint_dir, "latest_checkpoint.txt"), "w") as f:
         f.write(checkpoint_path)
     
     print(f"[*] Checkpoint saved at iteration {itr}")
@@ -36,8 +41,9 @@ def save_checkpoint(gaussians, optimizer, itr, loss, args):
 #NOTE: My addition to the implementation
 def load_checkpoint(gaussians, optimizer, args):
     """Load the latest checkpoint if available"""
-    latest_file = os.path.join(args.out_path, "latest_checkpoint.txt")
-    if not os.path.exists(latest_file):
+    checkpoint_dir = os.path.join(args.out_path, "checkpoints")
+    latest_file = os.path.join(checkpoint_dir, "latest_checkpoint.txt")
+    if not os.path.exists(checkpoint_dir) or not os.path.exists(latest_file):
         print("[*] No checkpoint found, starting from scratch")
         return 0, 0.0
     
