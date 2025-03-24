@@ -114,6 +114,7 @@ def setup_optimizer(gaussians):
     #     {'params': [gaussians.means], 'lr': 0.005, "name": "means"},
     # ]
 
+    # train_1
     parameters = [
         {'params': [gaussians.pre_act_opacities], 'lr': 0.001, "name": "opacities"},
         {'params': [gaussians.pre_act_scales], 'lr': 0.002, "name": "scales"},
