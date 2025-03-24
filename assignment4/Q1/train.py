@@ -10,6 +10,7 @@ from model import Scene, Gaussians
 from torch.utils.data import DataLoader
 from data_utils import TruckDataset, visualize_renders
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
+import torch.nn.functional 
 
 def make_trainable(gaussians):
 
@@ -162,7 +163,7 @@ def run_training(args):
         # Compute loss
         ### YOUR CODE HERE ###
         # HINT: A simple standard loss function should work.
-        loss = F.l1_loss(pred_img, gt_img)
+        loss = torch.nn.functional.l1_loss(pred_img, gt_img)
         
         '''
         #NOTE: My addition to the implementation
