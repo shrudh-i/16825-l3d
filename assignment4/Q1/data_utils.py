@@ -219,7 +219,7 @@ def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
         torch.Tensor: View-dependent RGB colours of shape (N, 3)
     """
     # Unpack direction components for vectorized computation
-    x, y, z = gaussian_dirs[:, 0], gaussian_dirs[:, 1], gaussian_dirs[:, 2]
+    x, y, z = gaussian_dirs[0], gaussian_dirs[1], gaussian_dirs[2]
 
     # Prepare spherical harmonic coefficients
     c0 = spherical_harmonics[:, 0:3]  # Constant term
@@ -252,26 +252,26 @@ def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
     # Compute colour using vectorized operations
     color = (
         # Constant and first-order terms
-        c0 * 0.28209479177387814 -
-        y * c1 +
-        z * c2 -
-        x * c3 +
+        SH_C0 * c0 - \
+        SH_C1 * y * c1 + \
+        SH_C1 * z * c2 - \
+        SH_C1* x * c3 + \
 
         # Second-order terms
-        xy * c4 +
-        yz * c5 +
-        (2.0 * zz - xx - yy) * c6 +
-        xz * c7 +
-        (xx - yy) * c8 +
+        SH_C2_0 * xy * c4 + \
+        SH_C2_1 * yz * c5 + \
+        SH_C2_2 * (2.0 * zz - xx - yy) * c6 + \
+        SH_C2_3 * xz * c7 + \
+        SH_C2_4 * (xx - yy) * c8 + \
 
         # Third-order terms
-        y * (3.0 * xx - yy) * c9 +
-        xy * z * c10 +
-        y * (4.0 * zz - xx - yy) * c11 +
-        z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * c12 +
-        x * (4.0 * zz - xx - yy) * c13 +
-        z * (xx - yy) * c14 +
-        x * (xx - 3.0 * yy) * c15
+        SH_C3_0 * y * (3.0 * xx - yy) * c9 + \
+        SH_C3_1 * xy * z * c10 + \
+        SH_C3_2 * y * (4.0 * zz - xx - yy) * c11 + \
+        SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * c12 + \
+        SH_C3_4 * x * (4.0 * zz - xx - yy) * c13 + \
+        SH_C3_5 * z * (xx - yy) * c14 + \
+        SH_C3_6 * x * (xx - 3.0 * yy) * c15 \
     )
 
     # Final colour computation
