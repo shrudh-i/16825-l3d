@@ -125,9 +125,11 @@ def run_training(args):
     # loss_history = []
     '''
 
+    print("[*] Starting Training")
+
     # Training loop
     viz_frames = []
-    for itr in range(args.num_itrs):
+    for itr in tqdm(range(args.num_itrs)):
 
         # Fetching data
         try:
