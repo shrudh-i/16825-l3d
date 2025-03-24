@@ -162,7 +162,7 @@ def run_training(args):
         # Compute loss
         ### YOUR CODE HERE ###
         # HINT: A simple standard loss function should work.
-        loss = torch.abs(pred_img - gt_img).mean()
+        loss = F.l1_loss(pred_img, gt_img)
         
         '''
         #NOTE: My addition to the implementation
