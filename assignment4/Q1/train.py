@@ -114,12 +114,20 @@ def setup_optimizer(gaussians):
     #     {'params': [gaussians.means], 'lr': 0.005, "name": "means"},
     # ]
 
-    # train_1
+    # # train_1
+    # parameters = [
+    #     {'params': [gaussians.pre_act_opacities], 'lr': 0.001, "name": "opacities"},
+    #     {'params': [gaussians.pre_act_scales], 'lr': 0.002, "name": "scales"},
+    #     {'params': [gaussians.colours], 'lr': 0.01, "name": "colours"},
+    #     {'params': [gaussians.means], 'lr': 0.00035, "name": "means"},
+    # ]
+
+    # train_2
     parameters = [
-        {'params': [gaussians.pre_act_opacities], 'lr': 0.001, "name": "opacities"},
-        {'params': [gaussians.pre_act_scales], 'lr': 0.002, "name": "scales"},
-        {'params': [gaussians.colours], 'lr': 0.01, "name": "colours"},
-        {'params': [gaussians.means], 'lr': 0.00035, "name": "means"},
+        {'params': [gaussians.pre_act_opacities], 'lr': 0.00065, "name": "opacities"},
+        {'params': [gaussians.pre_act_scales], 'lr': 0.001, "name": "scales"},
+        {'params': [gaussians.colours], 'lr': 0.02, "name": "colours"},
+        {'params': [gaussians.means], 'lr': 0.0001, "name": "means"},
     ]
 
 
