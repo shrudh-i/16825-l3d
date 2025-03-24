@@ -210,5 +210,49 @@ def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
                                     RGB colour.
     """
     ### YOUR CODE HERE ###
-    colours = None
+    '''
+    Input shapes:
+        * spherical_harmonics: (N, 48)
+        * gaussian_dirs: (N, 3)
+    Output shapes:
+        * colours: (N, 3)
+    '''
+
+     # Base color computation
+    c0 = spherical_harmonics[:, 0:3]
+    color = SH_C0 * c0
+
+    # Extract direction components
+    x = gaussian_dirs[:, 0]
+    y = gaussian_dirs[:, 1]
+    z = gaussian_dirs[:, 2]
+    
+    # Precompute squared and product terms
+    xx, yy, zz = x * x, y * y, z * z
+    xy, yz, xz = x * y, y * z, x * z
+
+    # First-order terms
+    color -= y * spherical_harmonics[:, 3:6] - \
+             z * spherical_harmonics[:, 6:9] + \
+             x * spherical_harmonics[:, 9:12]
+
+    # Second-order terms
+    color += xy * spherical_harmonics[:, 12:15] + \
+             yz * spherical_harmonics[:, 15:18] + \
+             (2.0 * zz - xx - yy) * spherical_harmonics[:, 18:21] + \
+             xz * spherical_harmonics[:, 21:24] + \
+             (xx - yy) * spherical_harmonics[:, 24:27]
+
+    # Third-order terms
+    color += y * (3.0 * xx - yy) * spherical_harmonics[:, 27:30] + \
+             xy * z * spherical_harmonics[:, 30:33] + \
+             y * (4.0 * zz - xx - yy) * spherical_harmonics[:, 33:36] + \
+             z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * spherical_harmonics[:, 36:39] + \
+             x * (4.0 * zz - xx - yy) * spherical_harmonics[:, 39:42] + \
+             z * (xx - yy) * spherical_harmonics[:, 42:45] + \
+             x * (xx - 3.0 * yy) * spherical_harmonics[:, 45:48]
+
+    # Final normalization
+    colours = color + 0.5
+    colours = torch.clip(colours, 0.0, 1.0)
     return colours
