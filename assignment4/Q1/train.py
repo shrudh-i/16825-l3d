@@ -24,7 +24,7 @@ def save_checkpoint(gaussians, optimizer, itr, loss, args):
         'optimizer_state': optimizer.state_dict(),
         'loss': loss.item()
     }
-    checkpoint_path = os.path.join(args.out_path, f"checkpoint_{itr:07d}.pt")
+    checkpoint_path = os.path.join(args.out_path, f"/checkpoints/checkpoint_{itr:07d}.pt")
     torch.save(checkpoint, checkpoint_path)
     
     # Save the latest checkpoint path to a small file for easy retrieval
@@ -259,7 +259,7 @@ def run_training(args):
         
         #NOTE: My addition to the implementation
         # Save checkpoint periodically
-        if itr % args.checkpoint_freq == 0:
+        if itr % (args.checkpoint_freq + 1) == 0:
             save_checkpoint(gaussians, optimizer, itr, loss, args)
 
         '''
