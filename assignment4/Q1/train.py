@@ -12,6 +12,56 @@ from data_utils import TruckDataset, visualize_renders
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 import torch.nn.functional 
 
+#NOTE: My addition to the implementation
+def save_checkpoint(gaussians, optimizer, itr, loss, args):
+    """Save a checkpoint of the model"""
+    checkpoint = {
+        'iteration': itr,
+        'means': gaussians.means.detach().cpu(),
+        'colours': gaussians.colours.detach().cpu(),
+        'pre_act_scales': gaussians.pre_act_scales.detach().cpu(),
+        'pre_act_opacities': gaussians.pre_act_opacities.detach().cpu(),
+        'optimizer_state': optimizer.state_dict(),
+        'loss': loss.item()
+    }
+    checkpoint_path = os.path.join(args.out_path, f"checkpoint_{itr:07d}.pt")
+    torch.save(checkpoint, checkpoint_path)
+    
+    # Save the latest checkpoint path to a small file for easy retrieval
+    with open(os.path.join(args.out_path, "latest_checkpoint.txt"), "w") as f:
+        f.write(checkpoint_path)
+    
+    print(f"[*] Checkpoint saved at iteration {itr}")
+
+#NOTE: My addition to the implementation
+def load_checkpoint(gaussians, optimizer, args):
+    """Load the latest checkpoint if available"""
+    latest_file = os.path.join(args.out_path, "latest_checkpoint.txt")
+    if not os.path.exists(latest_file):
+        print("[*] No checkpoint found, starting from scratch")
+        return 0, 0.0
+    
+    with open(latest_file, "r") as f:
+        checkpoint_path = f.read().strip()
+    
+    if not os.path.exists(checkpoint_path):
+        print(f"[*] Checkpoint file {checkpoint_path} not found, starting from scratch")
+        return 0, 0.0
+        
+    print(f"[*] Loading checkpoint from {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path)
+    
+    # Load model parameters
+    gaussians.means = checkpoint['means'].to(args.device).requires_grad_(True)
+    gaussians.colours = checkpoint['colours'].to(args.device).requires_grad_(True)
+    gaussians.pre_act_scales = checkpoint['pre_act_scales'].to(args.device).requires_grad_(True)
+    gaussians.pre_act_opacities = checkpoint['pre_act_opacities'].to(args.device).requires_grad_(True)
+    
+    # Load optimizer state
+    optimizer.load_state_dict(checkpoint['optimizer_state'])
+    
+    return checkpoint['iteration'], checkpoint['loss']
+
 def make_trainable(gaussians):
 
     ### YOUR CODE HERE ###
@@ -134,12 +184,17 @@ def run_training(args):
     # # For tracking loss history (useful for debugging)
     # loss_history = []
     '''
+    
+    #NOTE: My addition to the implementation
+    # Try to load the latest checkpoint
+    start_itr, last_loss = load_checkpoint(gaussians, optimizer, args)
 
     print("[*] Starting Training")
 
     # Training loop
     viz_frames = []
-    for itr in range(args.num_itrs):
+    # for itr in range(args.num_itrs):
+    for itr in range(start_itr, args.num_itrs):
 
         # Fetching data
         try:
@@ -201,6 +256,12 @@ def run_training(args):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
+        
+        #NOTE: My addition to the implementation
+        # Save checkpoint periodically
+        if itr % args.checkpoint_freq == 0:
+            save_checkpoint(gaussians, optimizer, itr, loss, args)
+
         '''
         #NOTE: My addition to the implementation
         # scheduler.step(loss)
@@ -264,7 +325,7 @@ def run_training(args):
             # HINT: Get img_size from train_dataset
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = scene.render(
+            pred_img, _, _ = scene.render(
                 camera = camera,
                 img_size = train_dataset.img_size,
                 per_splat = args.gaussians_per_splat,
@@ -297,7 +358,7 @@ def run_training(args):
             # HINT: Get img_size from test_dataset
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = scene.render(
+            pred_img, _, _ = scene.render(
                 camera = camera,
                 img_size = test_dataset.img_size, #NOTE: using test dataset image size jere
                 per_splat = args.gaussians_per_splat,
@@ -349,6 +410,18 @@ def get_args():
         help="Frequency with which visualization should be performed."
     )
     parser.add_argument("--device", default="cuda", type=str, choices=["cuda", "cpu"])
+
+    #NOTE: My addition to the implementation
+    parser.add_argument(
+        "--checkpoint_freq", default=100, type=int,
+        help="Frequency with which checkpoints should be saved."
+    )
+
+    #NOTE: My addition to the implementation
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Resume training from the latest checkpoint if available."
+    )
     args = parser.parse_args()
     return args
 
