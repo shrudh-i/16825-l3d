@@ -164,7 +164,6 @@ class SDS:
             # Using classifier-free guidance (mixing the conditional and unconditional predictions)
             if text_embeddings_uncond is not None and guidance_scale != 1:
                 ### YOUR CODE HERE ###
-                # '''
                 # Concat unconditional and conditional embeddings
                 text_embeddings_concat = torch.cat([text_embeddings_uncond, text_embeddings])
 
@@ -181,8 +180,9 @@ class SDS:
                 noisy_pred_uncond, noisy_pred_cond = noise_pred_concat.chunk(2)
                 # Apply classifier-free guidance
                 noise_pred = noisy_pred_uncond + guidance_scale * (noisy_pred_cond - noisy_pred_uncond)
-                # '''
+                
                 '''
+                #NOTE: trial debug
                 noisy_pred_uncond = self.unet(
                 latents_noisy, t, encoder_hidden_states=text_embeddings_uncond
                 )[0]
@@ -196,13 +196,12 @@ class SDS:
         ### YOUR CODE HERE ###
 
         # Scale gradients by noise levels (w) as described in the paper
-        '''
-        # grad = w[:, None, None, None] * (noise_pred - noise) * grad_scale
+        grad = w * (noise_pred - noise) * grad_scale
 
-        # loss = torch.nn.functional.mse_loss(grad, torch.zeros_like(grad))
+        loss = torch.nn.functional.mse_loss(grad, torch.zeros_like(grad))
         '''
         target = latents - w * grad_scale * (noise_pred - noise)
-        # target = latents - w * grad_scale * (noise_pred - noise)
         loss = F.mse_loss(latents, target.detach())
+        '''
 
         return loss
