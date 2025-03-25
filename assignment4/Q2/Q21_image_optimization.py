@@ -32,7 +32,7 @@ def optimize_an_image(
 
     # Step 3. Create optimizer and loss function
     optimizer = torch.optim.AdamW([latents], lr=1e-1, weight_decay=0)
-    total_iter = 2000
+    total_iter = args.num_itr
     scheduler = get_cosine_schedule_with_warmup(optimizer, 100, int(total_iter * 1.5))
 
     # Step 4. Training loop to optimize the latents
@@ -80,6 +80,7 @@ if __name__ == "__main__":
         default="",
         help="postfix for the output directory to differentiate multiple runs",
     )
+    parser.add_argument("--num_itr", type=int, default=1000)
     args = parser.parse_args()
 
     seed_everything(args.seed)
