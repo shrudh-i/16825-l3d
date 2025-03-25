@@ -117,6 +117,95 @@ class SDS:
         imgs = (imgs * 255).round()  # [0, 1] => [0, 255]
         return imgs[0]
 
+    # def sds_loss(
+    #     self,
+    #     latents,
+    #     text_embeddings,
+    #     text_embeddings_uncond=None,
+    #     guidance_scale=100,
+    #     grad_scale=1,
+    # ):
+    #     """
+    #     Compute the SDS loss.
+
+    #     Args:
+    #         latents (tensor): input latents, shape [1, 4, 64, 64]
+    #         text_embeddings (tensor): conditional text embedding (for positive prompt), shape [1, 77, 1024]
+    #         text_embeddings_uncond (tensor, optional): unconditional text embedding (for negative prompt), shape [1, 77, 1024]. Defaults to None.
+    #         guidance_scale (int, optional): weight scaling for guidance. Defaults to 100.
+    #         grad_scale (int, optional): gradient scaling. Defaults to 1.
+
+    #     Returns:
+    #         loss (tensor): SDS loss
+    #     """
+
+    #     # sample a timestep ~ U(0.02, 0.98) to avoid very high/low noise level
+    #     t = torch.randint(
+    #         self.min_step,
+    #         self.max_step + 1,
+    #         (latents.shape[0],),
+    #         dtype=torch.long,
+    #         device=self.device,
+    #     )
+
+    #     # predict the noise residual with unet, NO grad!
+    #     with torch.no_grad():
+    #         ### YOUR CODE HERE ###
+
+    #         # add noise to the input latents according to the timestep
+    #         noise = torch.randn_like(latents)
+    #         latents_noisy = self.scheduler.add_noise(latents, noise, t)
+
+    #         # Predict the noise using the UNet with the conditional text embedding
+    #         noise_pred = self.unet(
+    #             latents_noisy, t, encoder_hidden_states=text_embeddings
+    #         )[0]
+ 
+    #         # Using classifier-free guidance (mixing the conditional and unconditional predictions)
+    #         if text_embeddings_uncond is not None and guidance_scale != 1:
+    #             ### YOUR CODE HERE ###
+    #             # Concat unconditional and conditional embeddings
+    #             text_embeddings_concat = torch.cat([text_embeddings_uncond, text_embeddings])
+
+    #             # Get noise prediction for both conditional and unconditional
+    #             latents_noisy_expanded = torch.cat([latents_noisy] * 2)
+    #             t_expanded = torch.cat([t] * 2)
+
+    #             # Concat the embeddings for both conditional (positive prompt) and unconditional (negative prompt)
+    #             noise_pred_concat = self.unet(
+    #                 latents_noisy_expanded, t_expanded, encoder_hidden_states=text_embeddings_concat
+    #             ).sample
+
+    #             # Split the predictions
+    #             noisy_pred_uncond, noisy_pred_cond = noise_pred_concat.chunk(2)
+    #             # Apply classifier-free guidance
+    #             noise_pred = noisy_pred_uncond + guidance_scale * (noisy_pred_cond - noisy_pred_uncond)
+                
+    #             '''
+    #             #NOTE: trial debug
+    #             noisy_pred_uncond = self.unet(
+    #             latents_noisy, t, encoder_hidden_states=text_embeddings_uncond
+    #             )[0]
+    #             # Apply classifier-free guidance
+    #             noise_pred = noisy_pred_uncond + guidance_scale * (noise_pred - noisy_pred_uncond)
+    #             '''
+
+
+    #     # Compute SDS loss
+    #     w = 1 - self.alphas[t]
+    #     ### YOUR CODE HERE ###
+
+    #     # Scale gradients by noise levels (w) as described in the paper
+    #     grad = latents - w[:, None, None, None] * (noise_pred - noise) * grad_scale
+
+    #     loss = torch.nn.functional.mse_loss(grad, torch.zeros_like(grad))
+    #     '''
+    #     target = latents - w * grad_scale * (noise_pred - noise)
+    #     loss = F.mse_loss(latents, target.detach())
+    #     '''
+
+    #     return loss
+
     def sds_loss(
         self,
         latents,
@@ -151,57 +240,22 @@ class SDS:
         # predict the noise residual with unet, NO grad!
         with torch.no_grad():
             ### YOUR CODE HERE ###
-
-            # add noise to the input latents according to the timestep
-            noise = torch.randn_like(latents)
-            latents_noisy = self.scheduler.add_noise(latents, noise, t)
-
-            # Predict the noise using the UNet with the conditional text embedding
-            noise_pred = self.unet(
-                latents_noisy, t, encoder_hidden_states=text_embeddings
-            )[0]
- 
-            # Using classifier-free guidance (mixing the conditional and unconditional predictions)
+            noise = torch.randn(latents.shape, dtype=latents.dtype, device=latents.device)
+            # https://github.com/huggingface/diffusers/blob/v0.27.2/src/diffusers/schedulers/scheduling_ddim.py#L471
+            noised_sample = self.scheduler.add_noise(latents, noise, t)
+            measured_noise = self.unet(noised_sample, t, encoder_hidden_states=text_embeddings)[0]
+  
             if text_embeddings_uncond is not None and guidance_scale != 1:
                 ### YOUR CODE HERE ###
-                # Concat unconditional and conditional embeddings
-                text_embeddings_concat = torch.cat([text_embeddings_uncond, text_embeddings])
-
-                # Get noise prediction for both conditional and unconditional
-                latents_noisy_expanded = torch.cat([latents_noisy] * 2)
-                t_expanded = torch.cat([t] * 2)
-
-                # Concat the embeddings for both conditional (positive prompt) and unconditional (negative prompt)
-                noise_pred_concat = self.unet(
-                    latents_noisy_expanded, t_expanded, encoder_hidden_states=text_embeddings_concat
-                ).sample
-
-                # Split the predictions
-                noisy_pred_uncond, noisy_pred_cond = noise_pred_concat.chunk(2)
-                # Apply classifier-free guidance
-                noise_pred = noisy_pred_uncond + guidance_scale * (noisy_pred_cond - noisy_pred_uncond)
-                
-                '''
-                #NOTE: trial debug
-                noisy_pred_uncond = self.unet(
-                latents_noisy, t, encoder_hidden_states=text_embeddings_uncond
-                )[0]
-                # Apply classifier-free guidance
-                noise_pred = noisy_pred_uncond + guidance_scale * (noise_pred - noisy_pred_uncond)
-                '''
-
+                measured_noise_uncond = self.unet(noised_sample, t, encoder_hidden_states=text_embeddings_uncond)[0]
+                measured_noise = measured_noise + guidance_scale * (measured_noise - measured_noise_uncond)
+ 
 
         # Compute SDS loss
         w = 1 - self.alphas[t]
         ### YOUR CODE HERE ###
 
-        # Scale gradients by noise levels (w) as described in the paper
-        grad = latents - w[:, None, None, None] * (noise_pred - noise) * grad_scale
-
-        loss = torch.nn.functional.mse_loss(grad, torch.zeros_like(grad))
-        '''
-        target = latents - w * grad_scale * (noise_pred - noise)
+        target = latents - w * grad_scale * (measured_noise - noise)
         loss = F.mse_loss(latents, target.detach())
-        '''
 
         return loss
