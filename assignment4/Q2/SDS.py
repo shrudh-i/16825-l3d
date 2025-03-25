@@ -196,7 +196,7 @@ class SDS:
         ### YOUR CODE HERE ###
 
         # Scale gradients by noise levels (w) as described in the paper
-        grad = latents - w * (noise_pred - noise) * grad_scale
+        grad = latents - w[:, None, None, None] * (noise_pred - noise) * grad_scale
 
         loss = torch.nn.functional.mse_loss(grad, torch.zeros_like(grad))
         '''
