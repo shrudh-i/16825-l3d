@@ -15,6 +15,8 @@ from PIL import Image
 from SDS import SDS
 from utils import prepare_embeddings, seed_everything
 
+import torchvision
+
 
 def optimize_nerf(
     sds,
@@ -29,6 +31,8 @@ def optimize_nerf(
     """
 
     # Step 1. Create text embeddings from prompt
+    if args.view_dep_text is 1:
+        embeddings = prepare_embeddings(sds, prompt, neg_prompt, view_dependent=True)
     embeddings = prepare_embeddings(sds, prompt, neg_prompt, view_dependent=False)
 
     # Step 2. Set up NeRF model
@@ -159,13 +163,52 @@ def optimize_nerf(
             if not args.view_dep_text:
                 text_cond = embeddings["default"]
             else:
-                ### YOUR CODE HERE ###
-                pass
+                # Interpolate text embeddings based on azimuth angle
+                # This allows text embeddings to vary based on view direction
+                normalized_azimuth = (azimuth[0] + 180) / 360  # Map [-180, 180] to [0, 1]
+                text_front = embeddings["front"]
+                text_side = embeddings["side"]
+                text_back = embeddings["back"]
+                text_cond = embeddings["default"]
+                
+                '''
+                # Linear interpolation strategy
+                if normalized_azimuth < 0.33:  # Front-side transition
+                    # Interpolate between front and side embeddings
+                    weight_front = 1 - (normalized_azimuth / 0.33)
+                    weight_side = normalized_azimuth / 0.33
+                    text_cond = weight_front * text_front + weight_side * text_side
+
+                elif normalized_azimuth < 0.66:  # Side-back transition
+                    # Interpolate between side and back embeddings
+                    weight_side = 1 - ((normalized_azimuth - 0.33) / 0.33)
+                    weight_back = (normalized_azimuth - 0.33) / 0.33
+                    text_cond = weight_side * text_side + weight_back * text_back
+
+                else:  # Back-front transition (wrapping around)
+                    weight_back = 1 - ((normalized_azimuth - 0.66) / 0.34)
+                    weight_front = (normalized_azimuth - 0.66) / 0.34
+                    text_cond = weight_back * text_back + weight_front * text_front
+
+                # Fallback to default if embeddings not available
+                if text_cond is None:
+                    text_cond = text_default
+                '''
 
   
             ### YOUR CODE HERE ###
-            latents = 
-            loss = 
+            pred_rgb = torchvision.transforms.Resize(size=(512, 512))(pred_rgb)
+            # pred_rgb = torchvision.transforms.Resize(size=(512, 512), interpolation=torchvision.transforms.functional.InterpolationMode.BILINEAR)(pred_rgb)
+            latents = sds.encode_imgs(pred_rgb)
+
+            if not args.view_dep_text:
+              loss = sds.sds_loss(latents, text_cond, text_embeddings_uncond=text_uncond)
+            else:
+              loss_front = sds.sds_loss(latents, text_front, text_embeddings_uncond=text_uncond)
+              loss_side = sds.sds_loss(latents, text_side, text_embeddings_uncond=text_uncond)
+              loss_back = sds.sds_loss(latents, text_back, text_embeddings_uncond=text_uncond)
+              loss_cond = sds.sds_loss(latents, text_cond, text_embeddings_uncond=text_uncond)
+              loss = loss_front + loss_side + loss_back + loss_cond
 
             # regularizations
             if args.lambda_entropy > 0:
@@ -300,12 +343,18 @@ if __name__ == "__main__":
 
     ### YOUR CODE HERE ###
     # You wil need to tune the following parameters to obtain good NeRF results
+    # ### regularizations
+    # parser.add_argument('--lambda_entropy', type=float, default=0, help="loss scale for alpha entropy")
+    # parser.add_argument('--lambda_orient', type=float, default=0, help="loss scale for orientation")
+    # ### shading options
+    # parser.add_argument('--latent_iter_ratio', type=float, default=0, help="training iters that only use albedo shading")
+    
+    #NOTE: my implementation:
     ### regularizations
-    parser.add_argument('--lambda_entropy', type=float, default=0, help="loss scale for alpha entropy")
-    parser.add_argument('--lambda_orient', type=float, default=0, help="loss scale for orientation")
+    parser.add_argument('--lambda_entropy', type=float, default=1e-4, help="loss scale for alpha entropy")
+    parser.add_argument('--lambda_orient', type=float, default=1e-2, help="loss scale for orientation")
     ### shading options
-    parser.add_argument('--latent_iter_ratio', type=float, default=0, help="training iters that only use albedo shading")
-
+    parser.add_argument('--latent_iter_ratio', type=float, default=0.2, help="training iters that only use albedo shading")
 
     parser.add_argument(
         "--postfix", type=str, default="", help="Postfix for the output directory"
