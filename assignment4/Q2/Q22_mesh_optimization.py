@@ -103,10 +103,10 @@ def optimize_mesh_texture(
                 fov=60  # field of view
             )
             query_cameras.append(camera)
-            
+
     # Step 4. Create optimizer training parameters
     optimizer = torch.optim.AdamW(color_field.parameters(), lr=5e-4, weight_decay=0)
-    total_iter = 2000
+    total_iter = args.num_itrs
     scheduler = get_cosine_schedule_with_warmup(optimizer, 100, int(total_iter * 1.5))
 
     # Step 5. Training loop to optimize the texture map
@@ -163,6 +163,7 @@ if __name__ == "__main__":
     parser.add_argument("--prompt", type=str, default="a hamburger")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", type=str, default="output")
+    parser.add_argument("--num_itrs", type=int, default=2000)
     parser.add_argument(
         "--postfix",
         type=str,
