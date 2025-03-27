@@ -14,11 +14,80 @@ from data_utils_harder_scene import get_nerf_datasets, trivial_collate
 from pytorch3d.renderer import PerspectiveCameras
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
+import torch.nn.functional
+
+#NOTE: My addition to the implementation
+def save_checkpoint(gaussians, optimizer, itr, loss, args):
+    """Save a checkpoint of the model"""
+    checkpoint = {
+        'iteration': itr,
+        'means': gaussians.means.detach().cpu(),
+        'colours': gaussians.colours.detach().cpu(),
+        'pre_act_scales': gaussians.pre_act_scales.detach().cpu(),
+        'pre_act_opacities': gaussians.pre_act_opacities.detach().cpu(),
+        'optimizer_state': optimizer.state_dict(),
+        'loss': loss.item()
+    }
+
+    # Create checkpoints directory if it doesn't exist
+    checkpoint_dir = os.path.join(args.out_path, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_{itr:07d}.pt")
+    torch.save(checkpoint, checkpoint_path)
+    
+    # Save the latest checkpoint path to a small file for easy retrieval
+    with open(os.path.join(checkpoint_dir, "latest_checkpoint.txt"), "w") as f:
+        f.write(checkpoint_path)
+    
+    print(f"[*] Checkpoint saved at iteration {itr}")
+
+#NOTE: My addition to the implementation
+def load_checkpoint(gaussians, optimizer, args):
+    """Load the latest checkpoint if available"""
+    checkpoint_dir = os.path.join(args.out_path, "checkpoints")
+    latest_file = os.path.join(checkpoint_dir, "latest_checkpoint.txt")
+    if not os.path.exists(checkpoint_dir) or not os.path.exists(latest_file):
+        print("[*] No checkpoint found, starting from scratch")
+        return 0, 0.0
+    
+    with open(latest_file, "r") as f:
+        checkpoint_path = f.read().strip()
+    
+    if not os.path.exists(checkpoint_path):
+        print(f"[*] Checkpoint file {checkpoint_path} not found, starting from scratch")
+        return 0, 0.0
+        
+    print(f"[*] Loading checkpoint from {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path)
+    
+    # Load model parameters
+    gaussians.means = checkpoint['means'].to(args.device).requires_grad_(True)
+    gaussians.colours = checkpoint['colours'].to(args.device).requires_grad_(True)
+    gaussians.pre_act_scales = checkpoint['pre_act_scales'].to(args.device).requires_grad_(True)
+    gaussians.pre_act_opacities = checkpoint['pre_act_opacities'].to(args.device).requires_grad_(True)
+    
+    # Load optimizer state
+    optimizer.load_state_dict(checkpoint['optimizer_state'])
+    
+    return checkpoint['iteration'], checkpoint['loss']
+
 def make_trainable(gaussians):
 
     ### YOUR CODE HERE ###
     # HINT: You can access and modify parameters from gaussians
-    pass
+    gaussians.means.requires_grad = True 
+    gaussians.pre_act_scales.requires_grad = True
+    gaussians.pre_act_opacities.requires_grad = True
+    gaussians.colours.requires_grad = True
+
+    '''
+    note:
+        * means -> centre positions of the gaussians in space
+        * pre_act_scales -> controls the size of the gaussians
+        * pre_act_opacities -> controls the opacity of the gaussians
+        * colours -> controls the colour (RGB) of the gaussians
+    '''
 
 def setup_optimizer(gaussians):
 
@@ -30,16 +99,42 @@ def setup_optimizer(gaussians):
     # HINT: Consider reducing the learning rates for parameters that seem to vary too
     # fast with the default settings.
     # HINT: Consider setting different learning rates for different sets of parameters.
+    # parameters = [
+    #     {'params': [gaussians.pre_act_opacities], 'lr': 0.05, "name": "opacities"},
+    #     {'params': [gaussians.pre_act_scales], 'lr': 0.05, "name": "scales"},
+    #     {'params': [gaussians.colours], 'lr': 0.05, "name": "colours"},
+    #     {'params': [gaussians.means], 'lr': 0.05, "name": "means"},
+    # ]
+
+    # train_1
     parameters = [
-        {'params': [gaussians.pre_act_opacities], 'lr': 0.05, "name": "opacities"},
-        {'params': [gaussians.pre_act_scales], 'lr': 0.05, "name": "scales"},
-        {'params': [gaussians.colours], 'lr': 0.05, "name": "colours"},
-        {'params': [gaussians.means], 'lr': 0.05, "name": "means"},
+        {'params': [gaussians.pre_act_opacities], 'lr': 0.00065, "name": "opacities"},
+        {'params': [gaussians.pre_act_scales], 'lr': 0.001, "name": "scales"},
+        {'params': [gaussians.colours], 'lr': 0.02, "name": "colours"},
+        {'params': [gaussians.means], 'lr': 0.0001, "name": "means"},
     ]
+
     optimizer = torch.optim.Adam(parameters, lr=0.0, eps=1e-15)
-    optimizer = None
+    # optimizer = None
 
     return optimizer
+
+#NOTE: My addition to the implementation
+def setup_scheduler(optimizer):
+    '''
+    The ReduceLROnPlateau scheduler will reduce learning rates when the loss plateaus
+    - 'mode': 'min' because we want to minimize the loss
+    - 'factor': 0.5 means the learning rate will be halved when triggered
+    - 'patience': 50 means it will wait 50 iterations before reducing LR if no improvement
+    - 'threshold': 0.01 is the minimum improvement needed to be considered progress
+    - 'verbose': True means it will print a message when LR is reduced
+    '''
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=50, 
+        threshold=0.01, verbose=True
+    )
+
+    return scheduler
 
 def ndc_to_screen_camera(camera, img_size = (128, 128)):
 
@@ -96,6 +191,15 @@ def run_training(args):
     make_trainable(gaussians)
     optimizer = setup_optimizer(gaussians)
 
+    #NOTE: My addition to the implementation
+    scheduler = setup_scheduler(optimizer)
+    # For tracking loss history (useful for debugging)
+    loss_history = []
+
+    #NOTE: My addition to the implementation
+    # Try to load the latest checkpoint
+    start_itr, last_loss = load_checkpoint(gaussians, optimizer, args)
+
     # Training loop
     viz_frames = []
     for itr in range(args.num_itrs):
@@ -117,15 +221,35 @@ def run_training(args):
         # HINT: Set img_size to (128, 128)
         # HINT: Get per_splat from args.gaussians_per_splat
         # HINT: camera is available above
-        pred_img = None
+        pred_img, _, _ = scene.render(
+            camera = camera,
+            img_size = train_dataset.img_size,
+            per_splat = args.gaussians_per_splat,
+            bg_colour = (0.0, 0.0, 0.0)
+        )
 
         # Compute loss
         ### YOUR CODE HERE ###
-        loss = None
+        loss = torch.nn.functional.l1_loss(pred_img, gt_img)
+
+        #NOTE: My addition to the implementation
+        loss_history.append(loss.item())
+        # Check for NaN values (debugging)
+        if torch.isnan(loss):
+            print("Warning: NaN loss detected! Skipping this iteration.")
+            optimizer.zero_grad()
+            continue
 
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
+        #NOTE: My addition to the implementation
+        scheduler.step(loss)
+
+        #NOTE: My addition to the implementation
+        # Save checkpoint periodically
+        if (itr+1) % args.checkpoint_freq == 0:
+            save_checkpoint(gaussians, optimizer, itr, loss, args)
 
         print(f"[*] Itr: {itr:07d} | Loss: {loss:0.3f}")
 
@@ -160,7 +284,12 @@ def run_training(args):
             # HINT: Set img_size to (128, 128)
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = None
+            pred_img, _, _ = scene.render(
+                camera = camera,
+                img_size = train_dataset.img_size,
+                per_splat = args.gaussians_per_splat,
+                bg_colour = (0.0, 0.0, 0.0)
+            )
 
         pred_npy = pred_img.detach().cpu().numpy()
         pred_npy = (np.clip(pred_npy, 0.0, 1.0) * 255.0).astype(np.uint8)
@@ -186,7 +315,12 @@ def run_training(args):
             # HINT: Set img_size to (128, 128)
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = None
+            pred_img, _, _ = scene.render(
+                camera = camera,
+                img_size = train_dataset.img_size,
+                per_splat = args.gaussians_per_splat,
+                bg_colour = (0.0, 0.0, 0.0)
+            )
 
             gt_npy = gt_img.detach().cpu().numpy()
             pred_npy = pred_img.detach().cpu().numpy()
@@ -233,6 +367,17 @@ def get_args():
         help="Frequency with which visualization should be performed."
     )
     parser.add_argument("--device", default="cuda", type=str, choices=["cuda", "cpu"])
+    #NOTE: My addition to the implementation
+    parser.add_argument(
+        "--checkpoint_freq", default=100, type=int,
+        help="Frequency with which checkpoints should be saved."
+    )
+
+    #NOTE: My addition to the implementation
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Resume training from the latest checkpoint if available."
+    )
     args = parser.parse_args()
     return args
 
