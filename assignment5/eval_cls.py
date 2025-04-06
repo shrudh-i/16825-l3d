@@ -34,7 +34,7 @@ if __name__ == '__main__':
     create_dir(args.output_dir)
 
     # ------ TO DO: Initialize Model for Classification Task ------
-    model = 
+    model = cls_model(num_classes=args.num_cls_class).to(args.device)
     
     # Load Model Checkpoint
     model_path = './checkpoints/cls/{}.pt'.format(args.load_checkpoint)
@@ -51,7 +51,18 @@ if __name__ == '__main__':
     test_label = torch.from_numpy(np.load(args.test_label))
 
     # ------ TO DO: Make Prediction ------
-    pred_label = 
+    # TODO: check which implementation works better
+    # with torch.no_grad():
+    #     outputs = model(test_data.to(args.device))
+    #     pred_label = torch.argmax(outputs, dim=1)
+
+    pred_labels = []
+    for data, label in zip(test_data, test_label):
+        pred_label =  model(data)
+        pred_label = torch.argmax(pred_label, 1)
+        pred_labels.append(pred_label)
+    
+    pred_labels = torch.cat(pred_labels)
 
     # Compute Accuracy
     test_accuracy = pred_label.eq(test_label.data).cpu().sum().item() / (test_label.size()[0])
