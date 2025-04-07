@@ -151,17 +151,34 @@ class seg_model(nn.Module):
             nn.Conv1d(1088, 512, 1),
             nn.BatchNorm1d(512),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            # nn.Dropout(0.3),
             nn.Conv1d(512, 256, 1),
             nn.BatchNorm1d(256),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            # nn.Dropout(0.3),
             nn.Conv1d(256, 128, 1),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            # nn.Dropout(0.3),
             nn.Conv1d(128, num_seg_classes, 1)
         )
+
+        # # MLP for segmentation with Dropout + LeakyReLU
+        # self.segmenter = nn.Sequential(
+        #     nn.Conv1d(1088, 512, 1),
+        #     nn.BatchNorm1d(512),
+        #     nn.LeakyReLU(negative_slope=0.2),
+        #     nn.Dropout(0.3),
+        #     nn.Conv1d(512, 256, 1),
+        #     nn.BatchNorm1d(256),
+        #     nn.LeakyReLU(negative_slope=0.2),
+        #     nn.Dropout(0.3),
+        #     nn.Conv1d(256, 128, 1),
+        #     nn.BatchNorm1d(128),
+        #     nn.LeakyReLU(negative_slope=0.2),
+        #     nn.Dropout(0.3),
+        #     nn.Conv1d(128, num_seg_classes, 1)
+        # )
 
     def forward(self, points):
         batch_size = points.size(0)
