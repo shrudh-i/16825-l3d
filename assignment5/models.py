@@ -93,7 +93,23 @@ class cls_model(nn.Module):
 class seg_model(nn.Module):
     def __init__(self, num_seg_classes = 6):
         super(seg_model, self).__init__()
-        pass
+        
+        # Feature extraction
+        self.features = PointNetFeatures()
+
+        # MLP for segmentation
+        self.segmenter = nn.Sequential(
+            nn.Conv1d(1088, 512, 1),  # 1088 = 1024 (global) + 64 (local)
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Conv1d(512, 256, 1),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Conv1d(256, 128, 1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Conv1d(128, num_seg_classes, 1)
+        )
 
     def forward(self, points):
         '''
@@ -101,7 +117,29 @@ class seg_model(nn.Module):
                 , where B is batch size and N is the number of points per object (N=10000 by default)
         output: tensor of size (B, N, num_seg_classes)
         '''
-        pass
+        batch_size = points.size(0)
+        num_points = points.size(1)
+        
+        # Extract point features (B, 1024, N)
+        x_local = self.features.mlp1(points.transpose(2, 1))  # (B, 64, N)
+        x = self.features.mlp2(x_local)  # (B, 1024, N)
+        
+        # Global feature (B, 1024, 1)
+        global_feat = torch.max(x, dim=2, keepdim=True)[0]  # max pooling
+        
+        # Expand global feature to all points
+        global_feat_expanded = global_feat.repeat(1, 1, num_points)  # (B, 1024, N)
+        
+        # Concatenate global and local features
+        x = torch.cat([global_feat_expanded, x_local], dim=1)  # (B, 1024+64, N)
+        
+        # Segmentation
+        x = self.segmenter(x)  # (B, num_seg_classes, N)
+        
+        # Reshape to (B, N, num_seg_classes)
+        x = x.transpose(2, 1)
+        
+        return x
 
 
 
