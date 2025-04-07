@@ -105,17 +105,27 @@ if __name__ == '__main__':
     test_label = test_label.astype(int)
     pred_labels = pred_labels.astype(int)
     
-    # Compute overall accuracy
-    accuracy = np.mean(pred_labels == test_label)
+    # Convert predictions and labels to torch tensors
+    pred_labels = torch.from_numpy(pred_labels)
+    test_label = torch.from_numpy(test_label)
+
+    # Compute overall accuracy using PyTorch
+    overall_correct = pred_labels.eq(test_label).sum().item()
+    overall_total = test_label.size(0)
+    accuracy = overall_correct / overall_total
     print(f"Overall test accuracy: {accuracy:.4f}")
-    
-    # Compute per-class accuracy
+
+    # Compute per-class accuracy using PyTorch
     for class_idx in range(args.num_cls_class):
-        class_mask = test_label == class_idx
-        if np.sum(class_mask) > 0:
-            class_acc = np.mean(pred_labels[class_mask] == test_label[class_mask])
+        class_mask = (test_label == class_idx)
+        num_samples_in_class = class_mask.sum().item()
+
+        if num_samples_in_class > 0:
+            correct_preds = pred_labels.eq(test_label).logical_and(class_mask).sum().item()
+            class_acc = correct_preds / num_samples_in_class
             print(f"Class {class_names[class_idx]} accuracy: {class_acc:.4f}")
-    
+
+
     # Find failures and successes for each class
     results = {}
     for class_idx in range(args.num_cls_class):
