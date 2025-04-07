@@ -74,7 +74,7 @@ def test(test_dataloader, model, epoch, args, writer):
 
             # ------ TO DO: Make Predictions ------
             with torch.no_grad():     
-                pred_labels = torch.argmax(model(point_clouds), dim=1)
+                pred_labels = torch.argmax(model(point_clouds), dim=1, keepdim=False)
 
             correct_point += pred_labels.eq(labels.data).cpu().sum().item()
             num_point += labels.view([-1,1]).size()[0]
