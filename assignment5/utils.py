@@ -163,3 +163,27 @@ def viz_cls(verts, path, device, title=None, num_frames=50, fps=10):
     imageio.mimsave(path, frames, fps=fps, loop=0)
     print(f"Saved GIF to {path}")
 
+def rotate_point_cloud(point_cloud, angle_deg):
+    """
+    Rotate the point cloud around X axis by angle_deg degrees
+    
+    Args:
+        point_cloud: numpy array of shape (N, 3)
+        angle_deg: rotation angle in degrees
+    
+    Returns:
+        rotated point cloud of shape (N, 3)
+    """
+    rotation_angle = np.radians(angle_deg)
+    
+    # Rotation matrix around x-axis
+    rotation_matrix = np.array([
+        [1, 0, 0],
+        [0, np.cos(rotation_angle), -np.sin(rotation_angle)],
+        [0, np.sin(rotation_angle), np.cos(rotation_angle)]
+    ])
+    
+    # Apply rotation
+    rotated_point_cloud = np.dot(point_cloud, rotation_matrix)
+    
+    return rotated_point_cloud
