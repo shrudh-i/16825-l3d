@@ -92,6 +92,7 @@ def viz_seg (verts, labels, path, device):
 '''
 
 #NOTE: my additional visualization code
+'''
 def viz_seg(verts, labels, path, device, title=None, num_frames=30, fps=15):
     """
     Visualize segmentation result using matplotlib
@@ -186,7 +187,6 @@ def viz_seg(verts, labels, path, device, title=None, num_frames=30, fps=15):
     # Create the GIF directly from memory
     imageio.mimsave(path, frames, fps=fps, loop=0)
     print(f"Saved segmentation GIF to {path}")
-'''
 
 def viz_cls(verts, path, device, title=None, num_frames=50, fps=10):
     """

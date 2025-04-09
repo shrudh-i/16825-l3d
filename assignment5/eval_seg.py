@@ -17,7 +17,7 @@ def create_parser():
     parser.add_argument('--num_points', type=int, default=10000, help='The number of points per object to be included in the input data')
 
     # Directories and checkpoint/sample iterations
-    parser.add_argument('--load_checkpoint', type=str, default='model_epoch_0')
+    parser.add_argument('--load_checkpoint', type=str, default='best_model')
     parser.add_argument('--i', type=int, default=0, help="index of the object to visualize")
 
     parser.add_argument('--test_data', type=str, default='./data/seg/data_test.npy')
@@ -36,15 +36,16 @@ def create_parser():
 
     return parser
 
-def evaluate_segmentation(model, data, labels, device):
+def evaluate_segmentation(model, data, labels, device, batch_size=32):
     """
-    Evaluate model performance on segmentation data
+    Evaluate model performance on segmentation data in batches
     
     Args:
         model: segmentation model
         data: input point cloud data tensor
         labels: ground truth labels tensor
         device: torch device
+        batch_size: number of objects to process in each batch
         
     Returns:
         pred_labels: predicted labels
@@ -53,17 +54,31 @@ def evaluate_segmentation(model, data, labels, device):
     """
     model.eval()
     
-    with torch.no_grad():
-        outputs = model(data.to(device))
-        pred_labels = torch.argmax(outputs, dim=2)
+    # Initialize storage for predictions
+    num_objects = data.shape[0]
+    pred_labels = torch.zeros_like(labels)
     
-    # Calculate overall accuracy (across all points)
-    accuracy = pred_labels.eq(labels.to(device)).cpu().sum().item() / (labels.numel())
+    # Process data in batches
+    for i in range(0, num_objects, batch_size):
+        # Get the batch
+        end_idx = min(i + batch_size, num_objects)
+        batch_data = data[i:end_idx].to(device)
+        
+        with torch.no_grad():
+            # Forward pass
+            batch_outputs = model(batch_data)
+            batch_preds = torch.argmax(batch_outputs, dim=2)
+            
+            # Store predictions
+            pred_labels[i:end_idx] = batch_preds.cpu()
     
-    # Calculate per-object accuracy
+    # Calculate overall accuracy (across all points) using original approach
+    accuracy = pred_labels.to(device).eq(labels.to(device)).cpu().sum().item() / (labels.numel())
+    
+    # Calculate per-object accuracy using original approach
     per_obj_accuracy = []
     for i in range(len(data)):
-        obj_acc = pred_labels[i].eq(labels[i].to(device)).cpu().sum().item() / labels[i].numel()
+        obj_acc = pred_labels[i].to(device).eq(labels[i].to(device)).cpu().sum().item() / labels[i].numel()
         per_obj_accuracy.append(obj_acc)
     
     return pred_labels, accuracy, per_obj_accuracy
@@ -149,11 +164,11 @@ if __name__ == '__main__':
             title = f"Good Prediction: Accuracy = {acc:.4f}"
             
             # Save ground truth visualization
-            gt_path = os.path.join(args.output_dir, f"good_{i}_gt_{args.exp_name}.gif")
+            gt_path = os.path.join(args.output_dir, f"good_{i}_gt_{args.exp_name}_{idx}.gif")
             viz_seg(test_data[idx], test_label[idx], gt_path, args.device)
             
             # Save prediction visualization
-            pred_path = os.path.join(args.output_dir, f"good_{i}_pred_{args.exp_name}.gif")
+            pred_path = os.path.join(args.output_dir, f"good_{i}_pred_{args.exp_name}_{idx}.gif")
             viz_seg(test_data[idx], pred_label[idx], pred_path, args.device)
             print(f"  Object {idx}: Accuracy = {acc:.4f}")
             
@@ -176,11 +191,11 @@ if __name__ == '__main__':
             title = f"Bad Prediction: Accuracy = {acc:.4f}"
             
             # Save ground truth visualization
-            gt_path = os.path.join(args.output_dir, f"bad_{i}_gt_{args.exp_name}.gif")
+            gt_path = os.path.join(args.output_dir, f"bad_{i}_gt_{args.exp_name}_{idx}.gif")
             viz_seg(test_data[idx], test_label[idx], gt_path, args.device)
             
             # Save prediction visualization
-            pred_path = os.path.join(args.output_dir, f"bad_{i}_pred_{args.exp_name}.gif")
+            pred_path = os.path.join(args.output_dir, f"bad_{i}_pred_{args.exp_name}_{idx}.gif")
             viz_seg(test_data[idx], pred_label[idx], pred_path, args.device)
             print(f"  Object {idx}: Accuracy = {acc:.4f}")
             
