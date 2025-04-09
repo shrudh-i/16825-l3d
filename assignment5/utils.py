@@ -52,7 +52,7 @@ def get_points_renderer(
     )
     return renderer
 
-
+#NOTE: original visualization code
 def viz_seg (verts, labels, path, device):
     """
     visualize segmentation result
@@ -69,9 +69,12 @@ def viz_seg (verts, labels, path, device):
     R, T = pytorch3d.renderer.cameras.look_at_view_transform(dist=dist, elev=elev, azim=azim, device=device)
     c = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, fov=60, device=device)
 
+    # Get the number of points from the input tensor
+    num_points = verts.shape[0]
+
     sample_verts = verts.unsqueeze(0).repeat(30,1,1).to(torch.float)
     sample_labels = labels.unsqueeze(0)
-    sample_colors = torch.zeros((1,10000,3))
+    sample_colors = torch.zeros((1,num_points,3))
 
     # Colorize points based on segmentation labels
     for i in range(6):
@@ -86,6 +89,104 @@ def viz_seg (verts, labels, path, device):
     rend = (rend * 255).astype(np.uint8)
 
     imageio.mimsave(path, rend, fps=15)
+'''
+
+#NOTE: my additional visualization code
+def viz_seg(verts, labels, path, device, title=None, num_frames=30, fps=15):
+    """
+    Visualize segmentation result using matplotlib
+    output: a 360-degree gif
+    
+    Args:
+        verts: point cloud vertices tensor of shape (N, 3)
+        labels: segmentation labels tensor of shape (N,)
+        path: output path for the gif
+        device: torch device (kept for interface consistency)
+        title: optional title for the visualization
+        num_frames: number of frames in the animation (default: 30)
+        fps: frames per second for the output gif (default: 15)
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import imageio
+    from mpl_toolkits.mplot3d import Axes3D
+    
+    # Convert vertices and labels to numpy if they're torch tensors
+    if hasattr(verts, 'cpu'):
+        points = verts.detach().cpu().numpy()
+    else:
+        points = verts
+        
+    if hasattr(labels, 'cpu'):
+        labels = labels.detach().cpu().numpy()
+    
+    # Define colors for each segment (enhanced for better aesthetics while keeping the same approach)
+    colors = [
+        [1.0, 1.0, 1.0],  # White
+        [1.0, 0.0, 1.0],  # Magenta/Purple
+        [0.0, 1.0, 1.0],  # Cyan
+        [1.0, 1.0, 0.0],  # Yellow
+        [0.0, 0.0, 1.0],  # Blue
+        [1.0, 0.0, 0.0]   # Red
+    ]
+    
+    # Normalize points for better visualization
+    max_range = np.max(np.abs(points))
+    
+    # Store frames in memory
+    frames = []
+    
+    # Generate frames with different view angles
+    for i in range(num_frames):
+        # Rotate around the y-axis
+        azim_angle = i * (360 / num_frames)
+        
+        fig = plt.figure(figsize=(8, 8), dpi=100)
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Plot each segment with its color
+        for segment_id in range(6):
+            mask = labels == segment_id
+            if np.any(mask):  # Only plot if there are points with this label
+                segment_points = points[mask]
+                color = colors[segment_id]
+                ax.scatter(
+                    segment_points[:, 0],
+                    segment_points[:, 2],  # Swap y and z for better orientation
+                    segment_points[:, 1],
+                    s=5,  # Point size
+                    color=color,
+                    label=f"Segment {segment_id}"
+                )
+        
+        # Set consistent limits
+        ax.set_xlim(-max_range, max_range)
+        ax.set_ylim(-max_range, max_range)
+        ax.set_zlim(-max_range, max_range)
+        
+        # Add title if provided
+        if title:
+            ax.set_title(title)
+        
+        # Turn off axis for cleaner visualization
+        ax.set_axis_off()
+        
+        # Set viewing angle to keep objects upright
+        ax.view_init(elev=20, azim=azim_angle)
+        
+        # Set equal aspect ratio
+        ax.set_box_aspect([1, 1, 1])
+        
+        # Save the frame to memory
+        fig.canvas.draw()
+        frame = np.array(fig.canvas.renderer.buffer_rgba())
+        frames.append(frame)
+        plt.close(fig)
+    
+    # Create the GIF directly from memory
+    imageio.mimsave(path, frames, fps=fps, loop=0)
+    print(f"Saved segmentation GIF to {path}")
+'''
 
 def viz_cls(verts, path, device, title=None, num_frames=50, fps=10):
     """
