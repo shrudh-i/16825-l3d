@@ -156,8 +156,8 @@ if __name__ == '__main__':
         
         print(f"Class {class_names[class_idx]}: {len(successes)} correct predictions, {len(failures)} failures")
     
-    # Visualize random successful cases for each class
     if not args.rotation:
+    # Visualize random successful cases for each class
         print("\nCreating GIFs for successful predictions...")
         for class_idx in range(args.num_cls_class):
             if len(results[class_idx]['successes']) > 0:
