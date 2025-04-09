@@ -198,8 +198,8 @@ def viz_cls(verts, path, device, title=None, num_frames=50, fps=10):
         path: output path for the gif
         device: torch device (not used in this implementation but kept for interface consistency)
         title: optional title for the visualization
-        num_frames: number of frames in the animation (default: 30)
-        fps: frames per second for the output gif (default: 15)
+        num_frames: number of frames in the animation (default: 50)
+        fps: frames per second for the output gif (default: 10)
     """
     import numpy as np
     import matplotlib.pyplot as plt
@@ -213,7 +213,7 @@ def viz_cls(verts, path, device, title=None, num_frames=50, fps=10):
         points = verts
     
     # Normalize points for better visualization
-    max_range = np.max(np.abs(points))
+    max_range = np.max(np.abs(points)) * 1.1  # Slightly larger to avoid clipping
     
     # Store frames in memory
     frames = []
@@ -223,27 +223,31 @@ def viz_cls(verts, path, device, title=None, num_frames=50, fps=10):
         # Rotate around the y-axis
         azim_angle = i * (360 / num_frames)
         
+        # Create figure with minimal margins
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(111, projection='3d')
+        
+        # Adjust the subplot to take up more space in the figure
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         
         # Use the z-coordinate for coloring with viridis colormap
         scatter = ax.scatter(
             points[:, 0], 
             points[:, 2],  # Swap y and z for better orientation
             points[:, 1], 
-            s=5,  # Point size
+            s=5,   # Point size
             c=points[:, 2],  # Color by height (z-coordinate)
             cmap='viridis'
         )
         
-        # Set consistent limits
-        ax.set_xlim(-max_range, max_range)
-        ax.set_ylim(-max_range, max_range)
-        ax.set_zlim(-max_range, max_range)
+        # Set tighter limits to zoom in on the point cloud
+        ax.set_xlim(-max_range * 0.8, max_range * 0.8)
+        ax.set_ylim(-max_range * 0.8, max_range * 0.8)
+        ax.set_zlim(-max_range * 0.8, max_range * 0.8)
         
         # Add title if provided
         if title:
-            ax.set_title(title)
+            ax.set_title(title, y=0.95)  # Position title to avoid overlapping with points
         
         # Turn off axis for cleaner visualization
         ax.set_axis_off()
