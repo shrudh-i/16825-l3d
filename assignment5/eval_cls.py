@@ -23,7 +23,7 @@ def create_parser():
 
     parser.add_argument('--test_data', type=str, default='./data/cls/data_test.npy')
     parser.add_argument('--test_label', type=str, default='./data/cls/label_test.npy')
-    parser.add_argument('--output_dir', type=str, default='./output')
+    parser.add_argument('--output_dir', type=str, default='./output/cls_output')
 
     parser.add_argument('--exp_name', type=str, default="exp", help='The name of the experiment')
     parser.add_argument('--num_vis', type=int, default=3, help='Number of examples to visualize per class')
@@ -204,12 +204,6 @@ if __name__ == '__main__':
         
         for class_idx in range(args.num_cls_class):
             rotation_results['class_accuracies'][class_idx] = []
-
-        # # For visualization: Pick one sample from each class for visualization
-        # vis_samples = {}
-        # for class_idx in range(args.num_cls_class):
-        #     if len(results[class_idx]['successes']) > 0:
-        #         vis_samples[class_idx] = results[class_idx]['successes'][0]
 
         # For visualization: Pick two successful and two failed samples from each class
         vis_samples = {'successes': {}, 'failures': {}}
