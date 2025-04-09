@@ -205,12 +205,30 @@ if __name__ == '__main__':
         for class_idx in range(args.num_cls_class):
             rotation_results['class_accuracies'][class_idx] = []
 
-        # For visualization: Pick one sample from each class for visualization
-        vis_samples = {}
-        for class_idx in range(args.num_cls_class):
-            if len(results[class_idx]['successes']) > 0:
-                vis_samples[class_idx] = results[class_idx]['successes'][0]
+        # # For visualization: Pick one sample from each class for visualization
+        # vis_samples = {}
+        # for class_idx in range(args.num_cls_class):
+        #     if len(results[class_idx]['successes']) > 0:
+        #         vis_samples[class_idx] = results[class_idx]['successes'][0]
 
+        # For visualization: Pick two successful and two failed samples from each class
+        vis_samples = {'successes': {}, 'failures': {}}
+        for class_idx in range(args.num_cls_class):
+            # Get successful examples
+            if len(results[class_idx]['successes']) >= 2:
+                vis_samples['successes'][class_idx] = random.sample(results[class_idx]['successes'], 2)
+            elif len(results[class_idx]['successes']) == 1:
+                vis_samples['successes'][class_idx] = results[class_idx]['successes']
+            
+            # Get failed examples
+            if len(results[class_idx]['failures']) >= 2:
+                vis_samples['failures'][class_idx] = random.sample(results[class_idx]['failures'], 2)
+            elif len(results[class_idx]['failures']) == 1:
+                vis_samples['failures'][class_idx] = results[class_idx]['failures']
+
+        # Initialize per-object accuracy tracking
+        per_object_correct = np.zeros(len(test_data))
+        per_object_total = np.zeros(len(test_data))
 
         # Test for each rotation angle
         for angle in rotation_angles:
@@ -237,12 +255,15 @@ if __name__ == '__main__':
             print(f"Overall accuracy at {angle}°: {rot_accuracy:.4f}")
             for class_idx in range(args.num_cls_class):
                 print(f"Class {class_names[class_idx]} accuracy at {angle}°: {rot_class_accuracies.get(class_idx, 0):.4f}")
-            
-            # Visualize rotated samples if requested
-            for class_idx, idx in vis_samples.items():
-                title = f"Class: {class_names[class_idx]}, Rotation: {angle}°"
-                out_file = f"{rotation_output_dir}/rot_{angle}_class_{class_names[class_idx]}.gif"
-                viz_cls(torch.from_numpy(rotated_data[idx]).to(args.device), out_file, args.device, title)
+
+            # Visualize rotated samples
+            for sample_type in ['successes', 'failures']:
+                for class_idx, indices in vis_samples[sample_type].items():
+                    for i, idx in enumerate(indices):
+                        current_pred = rot_pred_labels[idx]
+                        title = f"GT: {class_names[test_label[idx]]}; Pred: {class_names[current_pred]}; Rotation: {angle}°"
+                        out_file = f"{rotation_output_dir}/rot_{angle}_class_{class_names[class_idx]}_{sample_type[:-1]}_{i}.gif"
+                        viz_cls(torch.from_numpy(rotated_data[idx]).to(args.device), out_file, args.device, title)
             
             '''
             # Plot accuracy vs rotation angle
